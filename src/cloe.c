@@ -14,6 +14,7 @@
 #include "dfp754_d64.h"
 #include "clob/clob.h"
 #include "clob/unxs.h"
+#include "clob/quos.h"
 #include "nifty.h"
 
 #define strtoqx		strtod64
@@ -93,16 +94,17 @@ send_beef(unxs_exe_t x)
 }
 
 static void
-send_cake(clob_t c, unxs_exe_t x)
+send_cake(quos_msg_t m)
 {
 	char buf[256U];
 	size_t len = 0U;
 
-	if (UNLIKELY(isnanpx(x.prc))) {
-		/* don't print nans */
-		return;
-	}
-	len = pxtostr(buf + len, sizeof(buf) - len, x.prc);
+	buf[len++] = (char)('A' + m.sid);
+	buf[len++] = '2';
+	buf[len++] = '\t';
+	len += pxtostr(buf + len, sizeof(buf) - len, m.prc);
+	buf[len++] = '\t';
+	len += qxtostr(buf + len, sizeof(buf) - len, m.new);
 	buf[len++] = '\n';
 	fwrite(buf, 1, len, quoout);
 	return;
@@ -123,17 +125,18 @@ main(int argc, char *argv[])
 		goto out;
 	}
 
+	/* get going then */
+	c = make_clob();
+
 	/* open the quote channel */
-	if ((quoout = fdopen(3, "w+")) == NULL) {
-		/* don't worry about him */
-		;
+	if ((quoout = fdopen(3, "w+")) != NULL) {
+		c.quo = make_quos();
 	}
 
 	/* open the trade channel */
 	traout = stdout;
 
 	/* read orders from stdin */
-	c = make_clob();
 	{
 		char *line = NULL;
 		size_t llen = 0UL;
@@ -154,24 +157,25 @@ main(int argc, char *argv[])
 				send_beef(x[i].x);
 			}
 			if (quoout != NULL) {
-				if (!isnanpx(x->x.prc)) {
-					send_cake(c, x->x);
+				const struct quos_s {
+					size_t z;
+					size_t n;
+					quos_msg_t *a;
+				} *q = c.quo;;
+				for (size_t i = 0U; i < q->n; i++) {
+					send_cake(q->a[i]);
 				}
-				for (size_t i = 1U; i < nx; i++) {
-					if (x[i - 1U].x.prc == x[i].x.prc) {
-						continue;
-					}
-					send_cake(c, x[i].x);
-				}
+				quos_clr(c.quo);
 			}
 		}
 	}
-	free_clob(c);
 
 	/* close quotes channel */
 	if (quoout != NULL) {
 		fclose(quoout);
+		free_quos(c.quo);
 	}
+	free_clob(c);
 	if (traout != NULL) {
 		fclose(traout);
 	}
