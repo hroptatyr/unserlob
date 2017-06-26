@@ -42,6 +42,8 @@ AC_CONFIG_LINKS([GNUmakefile:GNUmakefile])
 ## check for decimals
 SXE_CHECK_DFP754
 
+PKG_CHECK_MODULES([clob], [clob])
+
 ## output
 AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([build-aux/Makefile])

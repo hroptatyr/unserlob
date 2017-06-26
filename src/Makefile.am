@@ -28,6 +28,18 @@ libdfp_a_CPPFLAGS = $(AM_CPPFLAGS)
 libdfp_a_CPPFLAGS += $(dfp754_CFLAGS)
 
 
+noinst_PROGRAMS += cloe
+cloe_SOURCES = cloe.c cloe.yuck
+cloe_CPPFLAGS = $(AM_CPPFLAGS)
+cloe_CPPFLAGS += $(clob_CFLAGS)
+cloe_CPPFLAGS += $(dfp754_CFLAGS)
+cloe_LDFLAGS = $(AM_LDFLAGS)
+cloe_LDFLAGS += $(clob_LIBS)
+cloe_LDFLAGS += $(dfp754_LIBS)
+cloe_LDADD = libdfp.a
+BUILT_SOURCES = cloe.yucc
+
+
 ## version rules
 version.c: version.c.in $(top_builddir)/.version
 	$(AM_V_GEN) PATH="$(top_builddir)/build-aux:$${PATH}" \
