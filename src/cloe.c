@@ -127,6 +127,7 @@ main(int argc, char *argv[])
 
 	/* get going then */
 	c = make_clob();
+	c.exe = make_unxs(MODE_BI);
 
 	/* open the quote channel */
 	if ((quoout = fdopen(3, "w+")) != NULL) {
@@ -142,30 +143,25 @@ main(int argc, char *argv[])
 		size_t llen = 0UL;
 
 		for (ssize_t nrd; (nrd = getline(&line, &llen, stdin)) > 0;) {
-			unxs_exbi_t x[256U];
 			clob_ord_t o = push_beef(line, nrd);
-			size_t nx;
 
 			if (UNLIKELY(o.typ > TYPE_STP)) {
 				fputs("Error: unreadable line\n", stderr);
 				continue;
 			}
 			/* otherwise hand him to continuous trading */
-			nx = unxs_order(x, countof(x), c, o, NANPX);
+			unxs_order(c, o, NANPX);
 			/* print trades at the very least */
-			for (size_t i = 1U; i < nx; i++) {
-				send_beef(x[i].x);
+			for (size_t i = 0U; i < c.exe->n; i++) {
+				send_beef(c.exe->x[i]);
 			}
+			unxs_clr(c.exe);
 			if (quoout != NULL) {
-				const struct quos_s {
-					size_t z;
-					size_t n;
-					quos_msg_t *a;
-				} *q = c.quo;;
+				quos_t q = c.quo;
 				for (size_t i = 0U; i < q->n; i++) {
-					send_cake(q->a[i]);
+					send_cake(q->m[i]);
 				}
-				quos_clr(c.quo);
+				quos_clr(q);
 			}
 		}
 	}
@@ -175,10 +171,11 @@ main(int argc, char *argv[])
 		fclose(quoout);
 		free_quos(c.quo);
 	}
-	free_clob(c);
 	if (traout != NULL) {
 		fclose(traout);
 	}
+	free_unxs(c.exe);
+	free_clob(c);
 
 out:
 	yuck_free(argi);
