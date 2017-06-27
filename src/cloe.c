@@ -15,12 +15,15 @@
 #include "clob/clob.h"
 #include "clob/unxs.h"
 #include "clob/quos.h"
+#include "clob/mmod-auction.h"
 #include "nifty.h"
 
 #define strtoqx		strtod64
 #define strtopx		strtod64
 #define qxtostr		d64tostr
 #define pxtostr		d64tostr
+
+#define TYPE_AUC	((clob_type_t)0x10U)
 
 static FILE *traout, *quoout;
 
@@ -38,6 +41,8 @@ push_beef(const char *ln, size_t lz)
 		goto bork;
 	}
 	switch (ln[0U]) {
+	case 'F'/*INISH AUCTION*/:
+		return (clob_ord_t){TYPE_AUC};
 	case 'B'/*UY*/:
 	case 'L'/*ONG*/:
 	case 'b'/*uy*/:
@@ -127,22 +132,32 @@ main(int argc, char *argv[])
 
 	/* get going then */
 	c = make_clob();
-	c.exe = make_unxs(MODE_BI);
-
-	/* open the quote channel */
-	if ((quoout = fdopen(3, "w+")) != NULL) {
-		c.quo = make_quos();
+	switch (argi->cmd) {
+	default:
+		c.exe = make_unxs(MODE_BI);
+		/* open the quote channel */
+		if ((quoout = fdopen(3, "w+")) != NULL) {
+			c.quo = make_quos();
+		}
+		break;
+	case CLOE_CMD_AUCTION:
+		c.exe = make_unxs(MODE_SC);
+		break;
 	}
 
 	/* open the trade channel */
 	traout = stdout;
 
 	/* read orders from stdin */
-	{
-		char *line = NULL;
-		size_t llen = 0UL;
+	switch (argi->cmd) {
+		char *line;
+		size_t llen;
+		ssize_t nrd;
 
-		for (ssize_t nrd; (nrd = getline(&line, &llen, stdin)) > 0;) {
+	default:
+		/* default mode is continuous trading */
+		line = NULL, llen = 0U;
+		while ((nrd = getline(&line, &llen, stdin)) > 0) {
 			clob_ord_t o = push_beef(line, nrd);
 
 			if (UNLIKELY(o.typ > TYPE_STP)) {
@@ -164,6 +179,40 @@ main(int argc, char *argv[])
 				quos_clr(q);
 			}
 		}
+		free(line);
+		break;
+
+	case CLOE_CMD_AUCTION:
+		/* auction mode, read until we see FINISH AUCTION */
+		line = NULL, llen = 0U, nrd = 1;
+		while (nrd > 0) {
+			mmod_auc_t a;
+
+			while ((nrd = getline(&line, &llen, stdin)) > 0) {
+				clob_ord_t o = push_beef(line, nrd);
+
+				if (UNLIKELY(o.typ > TYPE_AUC)) {
+					fputs("Error: unreadable line\n", stderr);
+					continue;
+				} else if (o.typ == TYPE_AUC) {
+					/* auction him */
+					break;
+				}
+				/* otherwise track him in the book */
+				clob_add(c, o);
+				/* calculate theoretical auction price */
+				a = mmod_auction(c);
+			}
+			/* auction him */
+			unxs_auction(c, a.prc, a.qty);
+			/* print trades at the very least */
+			for (size_t i = 0U; i < c.exe->n; i++) {
+				send_beef(c.exe->x[i]);
+			}
+			unxs_clr(c.exe);
+		}
+		free(line);
+		break;
 	}
 
 	/* close quotes channel */
