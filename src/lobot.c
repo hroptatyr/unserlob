@@ -71,6 +71,7 @@ plqu_sum(plqu_t q)
 	qx_t sum = 0.dd;
 	for (plqu_iter_t i = {.q = q}; plqu_iter_next(&i);) {
 		sum += i.v.qty.dis;
+		sum += i.v.qty.hid;
 	}
 	return sum;
 }
@@ -216,6 +217,23 @@ send_cake(int s, quos_msg_t m)
 }
 
 static void
+send_top(int s, quos_msg_t m)
+{
+	char buf[256U];
+	size_t len = 0U;
+
+	buf[len++] = (char)('A' + m.sid);
+	buf[len++] = '1';
+	buf[len++] = '\t';
+	len += pxtostr(buf + len, sizeof(buf) - len, m.prc);
+	buf[len++] = '\t';
+	len += qxtostr(buf + len, sizeof(buf) - len, m.new);
+	buf[len++] = '\n';
+	write(s, buf, len);
+	return;
+}
+
+static void
 send_lvl2(int s)
 {
 	char buf[4096U];
@@ -261,6 +279,16 @@ send_lvl2(int s)
 		if (ap) {
 			len += qxtostr(
 				buf + len, sizeof(buf) - len, ai.v->sum.dis);
+		}
+		buf[len++] = '\t';
+		if (bp) {
+			len += qxtostr(
+				buf + len, sizeof(buf) - len, bi.v->sum.hid);
+		}
+		buf[len++] = '\t';
+		if (ap) {
+			len += qxtostr(
+				buf + len, sizeof(buf) - len, ai.v->sum.hid);
 		}
 		buf[len++] = '\n';
 	}
@@ -347,8 +375,25 @@ prep_cb(EV_P_ ev_prepare *UNUSED(p), int UNUSED(re))
 	}
 	with (quos_t q = glob.quo) {
 		for (size_t i = 0U; i < q->n; i++) {
-			send_cake(STDOUT_FILENO, q->m[i]);
+			send_cake(quot_chan, q->m[i]);
 		}
+		if (q->n) {
+			btree_key_t k;
+			btree_val_t *v;
+
+			v = btree_top(glob.lmt[SIDE_ASK], &k);
+			if (LIKELY(v != NULL)) {
+				send_top(quot_chan,
+					 (quos_msg_t){SIDE_ASK, k, v->sum.dis});
+			}
+
+			v = btree_top(glob.lmt[SIDE_BID], &k);
+			if (LIKELY(v != NULL)) {
+				send_top(quot_chan,
+					 (quos_msg_t){SIDE_BID, k, v->sum.dis});
+			}
+		}
+		/* clear them quotes */
 		quos_clr(q);
 	}
 	return;
