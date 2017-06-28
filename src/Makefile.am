@@ -28,16 +28,19 @@ libdfp_a_CPPFLAGS = $(AM_CPPFLAGS)
 libdfp_a_CPPFLAGS += $(dfp754_CFLAGS)
 
 
-noinst_PROGRAMS += cloe
-cloe_SOURCES = cloe.c cloe.yuck
-cloe_CPPFLAGS = $(AM_CPPFLAGS)
-cloe_CPPFLAGS += $(clob_CFLAGS)
-cloe_CPPFLAGS += $(dfp754_CFLAGS)
-cloe_LDFLAGS = $(AM_LDFLAGS)
-cloe_LDFLAGS += $(clob_LIBS)
-cloe_LDFLAGS += $(dfp754_LIBS)
-cloe_LDADD = libdfp.a
-BUILT_SOURCES = cloe.yucc
+noinst_PROGRAMS += lobot
+lobot_SOURCES = lobot.c lobot.yuck
+EXTRA_lobot_SOURCES = sock.c
+lobot_CPPFLAGS = $(AM_CPPFLAGS)
+lobot_CPPFLAGS += $(ev_CFLAGS)
+lobot_CPPFLAGS += $(clob_CFLAGS)
+lobot_CPPFLAGS += $(dfp754_CFLAGS)
+lobot_LDFLAGS = $(AM_LDFLAGS)
+lobot_LDFLAGS += $(ev_LIBS)
+lobot_LDFLAGS += $(clob_LIBS)
+lobot_LDFLAGS += $(dfp754_LIBS)
+lobot_LDADD = libdfp.a
+BUILT_SOURCES = lobot.yucc
 
 
 ## version rules

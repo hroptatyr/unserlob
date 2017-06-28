@@ -1,9 +1,11 @@
 #if defined HAVE_CONFIG_H
 # include "config.h"
 #endif	/* HAVE_CONFIG_H */
+#include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 #if defined HAVE_DFP754_H
 # include <dfp754.h>
 #elif defined HAVE_DFP_STDLIB_H
@@ -11,6 +13,8 @@
 #elif defined HAVE_DECIMAL_H
 # include <decimal.h>
 #endif	/* DFP754_H || HAVE_DFP_STDLIB_H || HAVE_DECIMAL_H */
+#include <ev.h>
+#include <errno.h>
 #include "dfp754_d64.h"
 #include "clob/clob.h"
 #include "clob/unxs.h"
@@ -25,7 +29,31 @@
 
 #define TYPE_AUC	((clob_type_t)0x10U)
 
-static FILE *traout, *quoout;
+#define NSECS	(1000000000)
+#define MCAST_ADDR	"ff05::134"
+#define QUOTE_PORT	7978
+#define TRADE_PORT	7979
+#define DEBUG_PORT	7977
+
+#undef EV_P
+#define EV_P  struct ev_loop *loop __attribute__((unused))
+
+
+static __attribute__((format(printf, 1, 2))) void
+serror(const char *fmt, ...)
+{
+	va_list vap;
+	va_start(vap, fmt);
+	vfprintf(stderr, fmt, vap);
+	va_end(vap);
+	if (errno) {
+		fputc(':', stderr);
+		fputc(' ', stderr);
+		fputs(strerror(errno), stderr);
+	}
+	fputc('\n', stderr);
+	return;
+}
 
 
 static clob_ord_t
@@ -94,7 +122,7 @@ send_beef(unxs_exe_t x)
 	buf[len++] = '\t';
 	len += qxtostr(buf + len, sizeof(buf) - len, x.prc);
 	buf[len++] = '\n';
-	fwrite(buf, 1, len, stdout);
+	//fwrite(buf, 1, len, stdout);
 	return;
 }
 
@@ -111,17 +139,31 @@ send_cake(quos_msg_t m)
 	buf[len++] = '\t';
 	len += qxtostr(buf + len, sizeof(buf) - len, m.new);
 	buf[len++] = '\n';
-	fwrite(buf, 1, len, quoout);
+	//fwrite(buf, 1, len, quoout);
 	return;
 }
 
 
-#include "cloe.yucc"
+static void
+beef_cb(EV_P_ ev_io *w, int UNUSED(re))
+{
+	return;
+}
+
+
+/* socket goodies */
+#include "sock.c"
+
+
+#include "lobot.yucc"
 
 int
 main(int argc, char *argv[])
 {
 	static yuck_t argi[1U];
+	ev_io beef[1U];
+	/* use the default event loop unless you have special needs */
+	struct ev_loop *loop;
 	int rc = 0;
 	clob_t c;
 
@@ -130,101 +172,51 @@ main(int argc, char *argv[])
 		goto out;
 	}
 
+	if (argi->daemonise_flag && daemon(0, 0) < 0) {
+		serror("\
+Error: cannot run in daemon mode");
+		rc = 1;
+		goto out;
+	}
+
+	/* initialise the main loop */
+	loop = ev_default_loop(EVFLAG_AUTO);
+
+	/* init the multicast socket */
+	with (int s = listener(TRADE_PORT)) {
+		if (UNLIKELY(s < 0)) {
+			serror("\
+Error: cannot open socket");
+			rc = 1;
+			goto nop;
+		}
+		/* hook into our event loop */
+		ev_io_init(beef, beef_cb, s, EV_READ);
+		ev_io_start(EV_A_ beef);
+	}
+
 	/* get going then */
 	c = make_clob();
-	switch (argi->cmd) {
-	default:
-		c.exe = make_unxs(MODE_BI);
-		/* open the quote channel */
-		if ((quoout = fdopen(3, "w+")) != NULL) {
-			c.quo = make_quos();
-		}
-		break;
-	case CLOE_CMD_AUCTION:
-		c.exe = make_unxs(MODE_SC);
-		break;
+	c.exe = make_unxs(MODE_BI);
+	c.quo = make_quos();
+
+	/* now wait for events to arrive */
+	ev_loop(EV_A_ 0);
+
+	/* begin the freeing */
+	with (int s = beef->fd) {
+		ev_io_stop(EV_A_ beef);
+		setsock_linger(s, 1);
+		close(s);
 	}
 
-	/* open the trade channel */
-	traout = stdout;
-
-	/* read orders from stdin */
-	switch (argi->cmd) {
-		char *line;
-		size_t llen;
-		ssize_t nrd;
-
-	default:
-		/* default mode is continuous trading */
-		line = NULL, llen = 0U;
-		while ((nrd = getline(&line, &llen, stdin)) > 0) {
-			clob_ord_t o = push_beef(line, nrd);
-
-			if (UNLIKELY(o.typ > TYPE_STP)) {
-				fputs("Error: unreadable line\n", stderr);
-				continue;
-			}
-			/* otherwise hand him to continuous trading */
-			unxs_order(c, o, NANPX);
-			/* print trades at the very least */
-			for (size_t i = 0U; i < c.exe->n; i++) {
-				send_beef(c.exe->x[i]);
-			}
-			unxs_clr(c.exe);
-			if (quoout != NULL) {
-				quos_t q = c.quo;
-				for (size_t i = 0U; i < q->n; i++) {
-					send_cake(q->m[i]);
-				}
-				quos_clr(q);
-			}
-		}
-		free(line);
-		break;
-
-	case CLOE_CMD_AUCTION:
-		/* auction mode, read until we see FINISH AUCTION */
-		line = NULL, llen = 0U, nrd = 1;
-		while (nrd > 0) {
-			mmod_auc_t a;
-
-			while ((nrd = getline(&line, &llen, stdin)) > 0) {
-				clob_ord_t o = push_beef(line, nrd);
-
-				if (UNLIKELY(o.typ > TYPE_AUC)) {
-					fputs("Error: unreadable line\n", stderr);
-					continue;
-				} else if (o.typ == TYPE_AUC) {
-					/* auction him */
-					break;
-				}
-				/* otherwise track him in the book */
-				clob_add(c, o);
-				/* calculate theoretical auction price */
-				a = mmod_auction(c);
-			}
-			/* auction him */
-			unxs_auction(c, a.prc, a.qty);
-			/* print trades at the very least */
-			for (size_t i = 0U; i < c.exe->n; i++) {
-				send_beef(c.exe->x[i]);
-			}
-			unxs_clr(c.exe);
-		}
-		free(line);
-		break;
-	}
-
-	/* close quotes channel */
-	if (quoout != NULL) {
-		fclose(quoout);
-		free_quos(c.quo);
-	}
-	if (traout != NULL) {
-		fclose(traout);
-	}
+	free_quos(c.quo);
 	free_unxs(c.exe);
 	free_clob(c);
+
+nop:
+	/* destroy the default evloop */
+	ev_default_destroy();
 
 out:
 	yuck_free(argi);

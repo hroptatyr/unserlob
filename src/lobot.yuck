@@ -1,0 +1,5 @@
+Usage: lobot
+
+Run the clob engine (in continuous trading mode).
+
+  -d, --daemonise       Run as daemon.
