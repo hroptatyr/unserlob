@@ -40,7 +40,21 @@ lobot_LDFLAGS += $(ev_LIBS)
 lobot_LDFLAGS += $(clob_LIBS)
 lobot_LDFLAGS += $(dfp754_LIBS)
 lobot_LDADD = libdfp.a
-BUILT_SOURCES = lobot.yucc
+BUILT_SOURCES += lobot.yucc
+
+noinst_PROGRAMS += hdgbot
+hdgbot_SOURCES = hdgbot.c hdgbot.yuck
+hdgbot_SOURCES += sock.c sock.h
+hdgbot_SOURCES += pcg_basic.c pcg_basic.h
+EXTRA_hdgbot_SOURCES = sock.c
+hdgbot_CPPFLAGS = $(AM_CPPFLAGS)
+hdgbot_CPPFLAGS += $(ev_CFLAGS)
+hdgbot_CPPFLAGS += $(dfp754_CFLAGS)
+hdgbot_LDFLAGS = $(AM_LDFLAGS)
+hdgbot_LDFLAGS += $(ev_LIBS)
+hdgbot_LDFLAGS += $(dfp754_LIBS)
+hdgbot_LDADD = libdfp.a
+BUILT_SOURCES += hdgbot.yucc
 
 
 ## version rules
