@@ -1,14 +1,17 @@
+#include <unistd.h>
 #include <sys/socket.h>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <net/if.h>
 #include <arpa/inet.h>
+#include "sock.h"
+#include "nifty.h"
 
 #define UDP_MULTICAST_TTL	64
 
 
 /* socket goodies */
-static inline void
+int
 setsock_nonblock(int sock)
 {
 	int opts;
@@ -16,14 +19,13 @@ setsock_nonblock(int sock)
 	/* get former options */
 	opts = fcntl(sock, F_GETFL);
 	if (opts < 0) {
-		return;
+		return -1;
 	}
 	opts |= O_NONBLOCK;
-	(void)fcntl(sock, F_SETFL, opts);
-	return;
+	return fcntl(sock, F_SETFL, opts);
 }
 
-static inline int
+int
 setsock_linger(int s, int ltime)
 {
 #if defined SO_LINGER
@@ -34,7 +36,7 @@ setsock_linger(int s, int ltime)
 #endif	/* SO_LINGER */
 }
 
-static inline int
+int
 setsock_reuseaddr(int s)
 {
 #if defined SO_REUSEADDR
@@ -45,14 +47,14 @@ setsock_reuseaddr(int s)
 #endif	/* SO_REUSEADDR */
 }
 
-static inline int
+int
 setsock_reuseport(int s)
 {
 	(void)s;
 	return 0;
 }
 
-static __attribute__((unused)) int
+int
 mc6_socket(void)
 {
 	volatile int s;
@@ -73,7 +75,7 @@ mc6_socket(void)
 	return s;
 }
 
-static __attribute__((unused)) int
+int
 mc6_join_group(
 	struct ipv6_mreq *tgt, int s,
 	const char *addr, short unsigned int port, const char *iface)
@@ -130,7 +132,7 @@ mc6_join_group(
 	return setsockopt(s, IPPROTO_IPV6, IPV6_JOIN_GROUP, &r, sizeof(r));
 }
 
-static __attribute__((unused)) void
+void
 mc6_leave_group(int s, struct ipv6_mreq *mreq)
 {
 	/* drop mcast6 group membership */
@@ -138,7 +140,7 @@ mc6_leave_group(int s, struct ipv6_mreq *mreq)
 	return;
 }
 
-static __attribute__((unused)) int
+int
 mc6_set_pub(int s, const char *addr, short unsigned int port, const char *iface)
 {
 	struct sockaddr_in6 sa = {
@@ -163,7 +165,7 @@ mc6_set_pub(int s, const char *addr, short unsigned int port, const char *iface)
 
 
 /* tcp shit */
-static int
+int
 listener(short unsigned int port)
 {
 #if defined IPPROTO_IPV6

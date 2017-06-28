@@ -30,7 +30,7 @@ libdfp_a_CPPFLAGS += $(dfp754_CFLAGS)
 
 noinst_PROGRAMS += lobot
 lobot_SOURCES = lobot.c lobot.yuck
-EXTRA_lobot_SOURCES = sock.c
+lobot_SOURCES += sock.c sock.h
 lobot_CPPFLAGS = $(AM_CPPFLAGS)
 lobot_CPPFLAGS += $(ev_CFLAGS)
 lobot_CPPFLAGS += $(clob_CFLAGS)

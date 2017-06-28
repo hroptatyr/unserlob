@@ -23,6 +23,7 @@
 /* we need book internals */
 #include "clob/plqu.h"
 #include "clob/btree.h"
+#include "sock.h"
 #include "nifty.h"
 
 #define strtoqx		strtod64
@@ -266,10 +267,6 @@ send_lvl2(int s)
 	write(s, buf, len);
 	return;
 }
-
-
-/* socket goodies */
-#include "sock.c"
 
 
 static void
