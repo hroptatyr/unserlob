@@ -1,13 +1,42 @@
 #include <unistd.h>
 #include <sys/socket.h>
+#include <stdint.h>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <net/if.h>
+#include <netdb.h>
 #include <arpa/inet.h>
+#include <string.h>
+#include <stdio.h>
 #include "sock.h"
 #include "nifty.h"
 
 #define UDP_MULTICAST_TTL	64
+
+
+static int
+sockaddr(
+	struct sockaddr *restrict sa, socklen_t *restrict sa_len,
+	const char *name, const char *svc)
+{
+	struct addrinfo hints;
+	struct addrinfo *res;
+	int s;
+
+	memset(sa, 0, *sa_len);
+	memset(&hints, 0, sizeof(hints));
+
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+	if (getaddrinfo(name, svc, &hints, &res)) {
+		return -1;
+	}
+	memcpy(sa, res->ai_addr, *sa_len = res->ai_addrlen);
+	s = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+
+	freeaddrinfo(res);
+	return s;
+}
 
 
 /* socket goodies */
@@ -194,6 +223,32 @@ listener(short unsigned int port)
 #else  /* !IPPROTO_IPV6 */
 	return -1;
 #endif	/* IPPROTO_IPV6 */
+}
+
+int
+connector(const char *host, short unsigned int port)
+{
+	struct sockaddr_storage sa;
+	socklen_t sz = sizeof(sa);
+	char svc[32U];
+	int s;
+
+	if (UNLIKELY(snprintf(svc, sizeof(svc), "%hu", port) < 0)) {
+		/* fuck */
+		goto nil;
+	}
+	if (UNLIKELY((s = sockaddr((void*)&sa, &sz, host, svc)) < 0)) {
+		goto nil;
+	}
+	if (UNLIKELY(connect(s, (struct sockaddr*)&sa, sz) < 0)) {
+		goto clo;
+	}
+	return s;
+
+clo:
+	close(s);
+nil:
+	return -1;
 }
 
 /* sock.c ends here */

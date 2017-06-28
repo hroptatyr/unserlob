@@ -31,5 +31,6 @@ mc6_set_pub(int s, const char *addr, short unsigned int port, const char *ifc);
 
 /* tcp shit */
 extern int listener(short unsigned int port);
+extern int connector(const char *host, short unsigned int port);
 
 #endif	/* INCLUDED_sock_h_ */
