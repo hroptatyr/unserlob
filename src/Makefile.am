@@ -56,6 +56,22 @@ hdgbot_LDFLAGS += $(dfp754_LIBS)
 hdgbot_LDADD = libdfp.a
 BUILT_SOURCES += hdgbot.yucc
 
+noinst_PROGRAMS += egobot
+egobot_SOURCES = egobot.c egobot.yuck
+egobot_SOURCES += sock.c sock.h
+EXTRA_egobot_SOURCES = sock.c
+egobot_CPPFLAGS = $(AM_CPPFLAGS)
+egobot_CPPFLAGS += -mkl
+egobot_CPPFLAGS += $(ev_CFLAGS)
+egobot_CPPFLAGS += $(dfp754_CFLAGS)
+egobot_CPPFLAGS += $(clob_CFLAGS)
+egobot_LDFLAGS = $(AM_LDFLAGS)
+egobot_LDFLAGS += -mkl
+egobot_LDFLAGS += $(ev_LIBS)
+egobot_LDFLAGS += $(dfp754_LIBS)
+egobot_LDADD = libdfp.a
+BUILT_SOURCES += egobot.yucc
+
 
 ## version rules
 version.c: version.c.in $(top_builddir)/.version
