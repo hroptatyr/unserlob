@@ -31,8 +31,6 @@
 #define qxtostr		d64tostr
 #define pxtostr		d64tostr
 
-#define TYPE_AUC	((clob_type_t)0x10U)
-
 #define NSECS	(1000000000)
 #define MCAST_ADDR	"ff05::134"
 #define QUOTE_PORT	7978
@@ -128,60 +126,126 @@ kill_user(uid_t u)
 }
 
 
-static clob_ord_t
-push_beef(const char *ln, size_t lz)
+typedef struct {
+	enum {
+		BMSG_UNK,
+		BMSG_ADD_ORD,
+		BMSG_DEL_OID,
+	} type;
+	union {
+		clob_ord_t ord;
+		clob_oid_t oid;
+	};
+} bmsg_t;
+
+static bmsg_t
+_push_beef_ord(const char *msg, size_t msz)
 {
 /* simple order protocol
  * BUY/LONG \t Q [\t P]
  * SELL/SHORT \t Q [\t P] */
-	clob_ord_t o;
+	bmsg_t r = {BMSG_ADD_ORD};
 	char *on;
 
-	if (UNLIKELY(!lz)) {
+	if (UNLIKELY(!msz)) {
 		goto bork;
 	}
-	switch (ln[0U]) {
-	case 'F'/*INISH AUCTION*/:
-		return (clob_ord_t){TYPE_AUC};
+	switch (*msg) {
 	case 'B'/*UY*/:
 	case 'L'/*ONG*/:
 	case 'b'/*uy*/:
 	case 'l'/*ong*/:
-		o.sid = SIDE_BID;
+		r.ord.sid = SIDE_BID;
 		break;
 	case 'S'/*ELL|HORT*/:
 	case 's'/*ell|hort*/:
-		o.sid = SIDE_ASK;
+		r.ord.sid = SIDE_ASK;
 		break;
-	default:
-		goto bork;
 	}
-	with (const char *x = strchr(ln, '\t')) {
+	with (const char *x = memchr(msg, '\t', msz)) {
 		if (UNLIKELY(x == NULL)) {
 			goto bork;
 		}
 		/* otherwise */
-		lz -= x + 1U - ln;
-		ln = x + 1U;
+		msz -= x + 1U - msg;
+		msg = x + 1U;
 	}
 	/* read quantity */
-	o.qty.hid = 0.dd;
-	o.qty.dis = strtoqx(ln, &on);
+	r.ord.qty.hid = 0.dd;
+	r.ord.qty.dis = strtoqx(msg, &on);
 	if (LIKELY(*on > ' ')) {
 		/* nope */
 		goto bork;
 	} else if (*on++ == '\t') {
-		o.lmt = strtopx(on, &on);
+		r.ord.lmt = strtopx(on, &on);
 		if (*on > ' ') {
 			goto bork;
 		}
-		o.typ = TYPE_LMT;
+		r.ord.typ = TYPE_LMT;
 	} else {
-		o.typ = TYPE_MKT;
+		r.ord.typ = TYPE_MKT;
 	}
-	return o;
+	return r;
 bork:
-	return (clob_ord_t){(clob_type_t)-1};
+	return (bmsg_t){BMSG_UNK};
+}
+
+static bmsg_t
+_push_beef_oid(const char *msg, size_t msz)
+{
+	bmsg_t r = {BMSG_DEL_OID};
+	const char *x = memchr(msg, '\t', msz);
+
+	if (UNLIKELY(x++ == NULL)) {
+		goto bork;
+	}
+
+	switch (x[0U]) {
+	case 'L':
+		r.oid.typ = TYPE_LMT;
+		break;
+	case 'M':
+		r.oid.typ = TYPE_MKT;
+		break;
+	default:
+		goto bork;
+	}
+	r.oid.sid = (clob_side_t)(x[4U] - 'A');
+	with (char *on) {
+		r.oid.prc = strtopx(x + 8U, &on);
+		if (*on++ != ' ') {
+			goto bork;
+		}
+		/* and read the qid */
+		r.oid.qid = strtoull(on, &on, 0);
+	}
+	return r;
+bork:
+	return (bmsg_t){BMSG_UNK};
+}
+
+static bmsg_t
+push_beef(const char *msg, size_t msz)
+{
+	if (UNLIKELY(!msz)) {
+		goto bork;
+	}
+	switch (*msg) {
+	case 'B'/*UY*/:
+	case 'L'/*ONG*/:
+	case 'b'/*uy*/:
+	case 'l'/*ong*/:
+	case 'S'/*ELL|HORT*/:
+	case 's'/*ell|hort*/:
+		return _push_beef_ord(msg, msz);
+	case 'C'/*ANCEL*/:
+	case 'c'/*ANCEL*/:
+		return _push_beef_oid(msg, msz);
+	default:
+		break;
+	}
+bork:
+	return (bmsg_t){BMSG_UNK};
 }
 
 static void
@@ -303,14 +367,19 @@ send_lvl2(int s)
 	btree_iter_t ai = {glob.lmt[SIDE_ASK]};
 
 	while (len < sizeof(buf)) {
-		bool bp = btree_iter_next(&bi);
-		bool ap = btree_iter_next(&ai);
+		bool bp, ap;
+
+		do {
+			bp = btree_iter_next(&bi);
+		} while (bp && bi.v->sum.dis + bi.v->sum.hid <= 0.dd);
+		do {
+			ap = btree_iter_next(&ai);
+		} while (ap && ai.v->sum.dis + ai.v->sum.hid <= 0.dd);
 
 		if (UNLIKELY(!bp && !ap)) {
 			break;
 		}
 
-		len = 0U;
 		if (bp) {
 			len += pxtostr(buf + len, sizeof(buf) - len, bi.k);
 		}
@@ -344,49 +413,95 @@ send_lvl2(int s)
 	return;
 }
 
+static void
+bmsg_add_ord(int fd, clob_ord_t o, const uid_t u)
+{
+	clob_oid_t oi;
+
+	switch (o.typ) {
+	case TYPE_MKT:
+	case TYPE_LMT:
+		break;
+	default:
+		/* it's just rubbish */
+		return;
+	}
+	/* stick uid into orderbook */
+	o.user = u;
+	/* continuous trading */
+	oi = unxs_order(glob, o, NANPX);
+	/* all fills concern him so tell him */
+	with (unxs_t x = glob.exe) {
+		for (size_t i = 0U; i < x->n; i++) {
+			const clob_side_t s =
+				clob_contra_side((clob_side_t)x->s[i]);
+			add_acct(u, unxs_exa(x->x[i], s));
+			send_fill(fd, x->x[i]);
+		}
+		/* get the user's account */
+		send_acct(fd, add_acct(u, (unxs_exa_t){0.dd, 0.dd}));
+	}
+	/* let him know about the residual order */
+	if (oi.qid) {
+		send_oid(fd, oi);
+	}
+	return;
+}
+
+static void
+bmsg_del_oid(int UNUSED(fd), clob_oid_t o)
+{
+	clob_del(glob, o);
+	return;
+}
+
 
+#define ZCLO	(4096U)
+#define UBSZ	(ZCLO - offsetof(struct uclo_s, buf))
+
+struct uclo_s {
+	ev_io w;
+	uid_t uid;
+	size_t bof;
+	char buf[];
+};
+
 static void
 data_cb(EV_P_ ev_io *w, int UNUSED(re))
 {
-	char buf[4096];
+	struct uclo_s *u = (void*)w;
 	ssize_t nrd;
+	size_t npr = 0U;
 
-	if ((nrd = read(w->fd, buf, sizeof(buf))) <= 0) {
+	nrd = read(u->w.fd, u->buf + u->bof, UBSZ - u->bof);
+	if (UNLIKELY(nrd <= 0)) {
 		/* they want closing */
 		goto clo;
 	}
-	with (clob_ord_t o = push_beef(buf, nrd)) {
-		clob_oid_t oi;
+	/* up the bof */
+	u->bof += nrd;
+	/* snarf linewise */
+	for (const char *x;
+	     (x = memchr(u->buf + npr, '\n', u->bof - npr));
+	     npr = x + 1U - u->buf) {
+		bmsg_t m = push_beef(u->buf + npr, x + 1U - (u->buf + npr));
 
-		switch (o.typ) {
-		case TYPE_MKT:
-		case TYPE_LMT:
+		switch (m.type) {
+		case BMSG_ADD_ORD:
+			bmsg_add_ord(u->w.fd, m.ord, u->uid);
+			break;
+		case BMSG_DEL_OID:
+			bmsg_del_oid(u->w.fd, m.oid);
 			break;
 		default:
-			/* it's just rubbish */
-			return;
-		}
-		/* let them know about this socket */
-		o.user = (uintptr_t)w->data;
-		/* continuous trading */
-		oi = unxs_order(glob, o, NANPX);
-		/* all fills concern him so tell him */
-		with (unxs_t x = glob.exe) {
-			const uid_t u = (uintptr_t)w->data;
-			for (size_t i = 0U; i < x->n; i++) {
-				const clob_side_t s =
-					clob_contra_side((clob_side_t)x->s[i]);
-				add_acct(u, unxs_exa(x->x[i], s));
-				send_fill(w->fd, x->x[i]);
-			}
-			/* get the user's account */
-			send_acct(w->fd, add_acct(u, (unxs_exa_t){0.dd, 0.dd}));
-		}
-		/* let him know about the residual order */
-		if (oi.qid) {
-			send_oid(w->fd, oi);
+			break;
 		}
 	}
+	/* move left-overs */
+	if (u->bof - npr) {
+		memmove(u->buf, u->buf + npr, u->bof - npr);
+	}
+	u->bof -= npr;
 	return;
 
 clo:
@@ -406,16 +521,16 @@ beef_cb(EV_P_ ev_io *w, int UNUSED(re))
 	struct sockaddr_storage sa;
 	socklen_t sa_size = sizeof(sa);
 	volatile int ns;
-	ev_io *aw;
+	struct uclo_s *aw;
 
 	if ((ns = accept(w->fd, (struct sockaddr*)&sa, &sa_size)) < 0) {
 		return;
 	}
 
-	aw = malloc(sizeof(*aw));
-        ev_io_init(aw, data_cb, ns, EV_READ);
-        ev_io_start(EV_A_ aw);
-	aw->data = (void*)(uintptr_t)add_user(ns);
+	aw = malloc(4096U);
+        ev_io_init(&aw->w, data_cb, ns, EV_READ);
+        ev_io_start(EV_A_ &aw->w);
+	aw->uid = add_user(ns);
 	return;
 }
 
