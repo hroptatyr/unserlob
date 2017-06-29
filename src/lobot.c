@@ -213,6 +213,27 @@ send_acct(int s, unxs_exa_t x)
 }
 
 static void
+send_oid(int s, clob_oid_t o)
+{
+	static const char *sids[] = {"ASK ", "BID "};
+	static const char *typs[] = {
+		[TYPE_LMT] = "LMT ",
+		[TYPE_MKT] = "MKT ",
+	};
+	char buf[256U];
+	size_t len = (memcpy(buf, "OID\t", 4U), 4U);
+
+	len += (memcpy(buf + len, typs[o.typ], 4U), 4U);
+	len += (memcpy(buf + len, sids[o.sid], 4U), 4U);
+	len += pxtostr(buf + len, sizeof(buf) - len, o.prc);
+	buf[len++] = ' ';
+	len += snprintf(buf + len, sizeof(buf) - len, "%zu", o.qid);
+	buf[len++] = '\n';
+	write(s, buf, len);
+	return;
+}
+
+static void
 send_beef(int s, unxs_exe_t x)
 {
 	char buf[256U];
@@ -360,6 +381,10 @@ data_cb(EV_P_ ev_io *w, int UNUSED(re))
 			}
 			/* get the user's account */
 			send_acct(w->fd, add_acct(u, (unxs_exa_t){0.dd, 0.dd}));
+		}
+		/* let him know about the residual order */
+		if (oi.qid) {
+			send_oid(w->fd, oi);
 		}
 	}
 	return;
