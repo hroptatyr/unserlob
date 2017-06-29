@@ -82,7 +82,7 @@ beef_cb(EV_P_ ev_io *w, int UNUSED(re))
 	char buf[1536U];
 	ssize_t nrd;
 
-	if (UNLIKELY((nrd = recv(w->fd, buf, sizeof(buf), 0)) < 0)) {
+	if (UNLIKELY((nrd = recv(w->fd, buf, sizeof(buf), 0)) <= 0)) {
 		return;
 	}
 	/* now snarf the line */
@@ -97,7 +97,7 @@ cake_cb(EV_P_ ev_io *w, int UNUSED(re))
 	char buf[1536U];
 	ssize_t nrd;
 
-	if (UNLIKELY((nrd = recv(w->fd, buf, sizeof(buf), 0)) < 0)) {
+	if (UNLIKELY((nrd = recv(w->fd, buf, sizeof(buf), 0)) <= 0)) {
 		return;
 	}
 	/* now snarf the line */
