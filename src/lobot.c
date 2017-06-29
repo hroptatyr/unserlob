@@ -80,19 +80,20 @@ plqu_sum(plqu_t q)
 /* order/connection mapper */
 static size_t nuser;
 static size_t zuser;
-static struct {
-	int s;
-} *user;
+static int *socks;
+static unxs_exa_t *accts;
 
 static uid_t
 add_user(int s)
 {
 	if (UNLIKELY(nuser >= zuser)) {
 		zuser = (zuser * 2U) ?: 64U;
-		user = realloc(user, zuser * sizeof(*user));
+		socks = realloc(socks, zuser * sizeof(*socks));
+		accts = realloc(accts, zuser * sizeof(*accts));
 	}
-	user[nuser++].s = s;
-	return nuser;
+	socks[nuser] = s;
+	accts[nuser] = (unxs_exa_t){0.dd, 0.dd};
+	return ++nuser;
 }
 
 static int
@@ -101,7 +102,18 @@ user_sock(uid_t u)
 	if (UNLIKELY(u <= 0)) {
 		return -1;
 	}
-	return user[u - 1].s;
+	return socks[u - 1];
+}
+
+static unxs_exa_t
+add_acct(uid_t u, unxs_exa_t a)
+{
+	if (UNLIKELY(u <= 0)) {
+		return (unxs_exa_t){0.dd, 0.dd};
+	}
+	accts[u - 1].base += a.base;
+	accts[u - 1].term += a.term;
+	return accts[u - 1];
 }
 
 static int
@@ -110,7 +122,8 @@ kill_user(uid_t u)
 	if (UNLIKELY(u <= 0)) {
 		return -1;
 	}
-	user[u - 1].s = -1;
+	/* reset socket but leave accounts untouched */
+	socks[u - 1] = -1;
 	return 0;
 }
 
@@ -366,10 +379,15 @@ prep_cb(EV_P_ ev_prepare *UNUSED(p), int UNUSED(re))
 {
 	with (unxs_t x = glob.exe) {
 		for (size_t i = 0U; i < x->n; i++) {
-			/* let the maker know before anyone else */
-			int s = user_sock(x->o[MODE_BI * i + SIDE_MAKER].user);
-			send_fill(s, x->x[i]);
+			/* let the maker know before anyone else
+			 * well, the taker has already been informed */
+			const uid_t u = x->o[MODE_BI * i + SIDE_MAKER].user;
+			const clob_side_t s = (clob_side_t)x->s[i];
+			int fd = user_sock(u);
+			add_acct(u, unxs_exa(x->x[i], s));
+			send_fill(fd, x->x[i]);
 			send_beef(STDOUT_FILENO, x->x[i]);
+
 		}
 		unxs_clr(x);
 	}
