@@ -337,7 +337,10 @@ data_cb(EV_P_ ev_io *w, int UNUSED(re))
 		oi = unxs_order(glob, o, NANPX);
 		/* all fills concern him so tell him */
 		with (unxs_t x = glob.exe) {
+			const uid_t u = (uintptr_t)w->data;
 			for (size_t i = 0U; i < x->n; i++) {
+				const clob_side_t s = (clob_side_t)x->s[i];
+				add_acct(u, unxs_exa(x->x[i], s));
 				send_fill(w->fd, x->x[i]);
 			}
 		}
