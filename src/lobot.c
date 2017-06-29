@@ -199,6 +199,20 @@ send_fill(int s, unxs_exe_t x)
 }
 
 static void
+send_acct(int s, unxs_exa_t x)
+{
+	char buf[256U];
+	size_t len = (memcpy(buf, "ACC\t", 4U), 4U);
+
+	len += qxtostr(buf + len, sizeof(buf) - len, x.base);
+	buf[len++] = '\t';
+	len += qxtostr(buf + len, sizeof(buf) - len, x.term);
+	buf[len++] = '\n';
+	write(s, buf, len);
+	return;
+}
+
+static void
 send_beef(int s, unxs_exe_t x)
 {
 	char buf[256U];
@@ -339,10 +353,13 @@ data_cb(EV_P_ ev_io *w, int UNUSED(re))
 		with (unxs_t x = glob.exe) {
 			const uid_t u = (uintptr_t)w->data;
 			for (size_t i = 0U; i < x->n; i++) {
-				const clob_side_t s = (clob_side_t)x->s[i];
+				const clob_side_t s =
+					clob_contra_side((clob_side_t)x->s[i]);
 				add_acct(u, unxs_exa(x->x[i], s));
 				send_fill(w->fd, x->x[i]);
 			}
+			/* get the user's account */
+			send_acct(w->fd, add_acct(u, (unxs_exa_t){0.dd, 0.dd}));
 		}
 	}
 	return;
@@ -389,6 +406,7 @@ prep_cb(EV_P_ ev_prepare *UNUSED(p), int UNUSED(re))
 			int fd = user_sock(u);
 			add_acct(u, unxs_exa(x->x[i], s));
 			send_fill(fd, x->x[i]);
+			send_acct(fd, add_acct(u, (unxs_exa_t){0.dd, 0.dd}));
 			send_beef(STDOUT_FILENO, x->x[i]);
 
 		}
