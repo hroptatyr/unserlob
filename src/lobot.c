@@ -24,6 +24,7 @@
 #include "clob/plqu.h"
 #include "clob/btree.h"
 #include "sock.h"
+#include "lol.h"
 #include "nifty.h"
 
 #define strtoqx		strtod64
@@ -126,227 +127,28 @@ kill_user(uid_t u)
 }
 
 
-typedef struct {
-	enum {
-		BMSG_UNK,
-		BMSG_ADD_ORD,
-		BMSG_DEL_OID,
-	} type;
-	union {
-		clob_ord_t ord;
-		clob_oid_t oid;
-	};
-} bmsg_t;
+#define SEND_OMSG(fd, x...)						\
+	do {								\
+		char __buf__[256U];					\
+		ssize_t __len__;					\
+		__len__ = send_omsg(__buf__, sizeof(__buf__), (omsg_t){x}); \
+		if (LIKELY(__len__ > 0)) {				\
+			(void)send((fd), __buf__, __len__, 0);		\
+		}							\
+	} while (0)
 
-static bmsg_t
-_push_beef_ord(const char *msg, size_t msz)
-{
-/* simple order protocol
- * BUY/LONG \t Q [\t P]
- * SELL/SHORT \t Q [\t P] */
-	bmsg_t r = {BMSG_ADD_ORD};
-	char *on;
-
-	if (UNLIKELY(!msz)) {
-		goto bork;
-	}
-	switch (*msg) {
-	case 'B'/*UY*/:
-	case 'L'/*ONG*/:
-	case 'b'/*uy*/:
-	case 'l'/*ong*/:
-		r.ord.sid = SIDE_BID;
-		break;
-	case 'S'/*ELL|HORT*/:
-	case 's'/*ell|hort*/:
-		r.ord.sid = SIDE_ASK;
-		break;
-	}
-	with (const char *x = memchr(msg, '\t', msz)) {
-		if (UNLIKELY(x == NULL)) {
-			goto bork;
-		}
-		/* otherwise */
-		msz -= x + 1U - msg;
-		msg = x + 1U;
-	}
-	/* read quantity */
-	r.ord.qty.hid = 0.dd;
-	r.ord.qty.dis = strtoqx(msg, &on);
-	if (LIKELY(*on > ' ')) {
-		/* nope */
-		goto bork;
-	} else if (*on++ == '\t') {
-		r.ord.lmt = strtopx(on, &on);
-		if (*on > ' ') {
-			goto bork;
-		}
-		r.ord.typ = TYPE_LMT;
-	} else {
-		r.ord.typ = TYPE_MKT;
-	}
-	return r;
-bork:
-	return (bmsg_t){BMSG_UNK};
-}
-
-static bmsg_t
-_push_beef_oid(const char *msg, size_t msz)
-{
-	bmsg_t r = {BMSG_DEL_OID};
-	const char *x = memchr(msg, '\t', msz);
-
-	if (UNLIKELY(x++ == NULL)) {
-		goto bork;
-	}
-
-	switch (x[0U]) {
-	case 'L':
-		r.oid.typ = TYPE_LMT;
-		break;
-	case 'M':
-		r.oid.typ = TYPE_MKT;
-		break;
-	default:
-		goto bork;
-	}
-	r.oid.sid = (clob_side_t)(x[4U] - 'A');
-	with (char *on) {
-		r.oid.prc = strtopx(x + 8U, &on);
-		if (*on++ != ' ') {
-			goto bork;
-		}
-		/* and read the qid */
-		r.oid.qid = strtoull(on, &on, 0);
-	}
-	return r;
-bork:
-	return (bmsg_t){BMSG_UNK};
-}
-
-static bmsg_t
-push_beef(const char *msg, size_t msz)
-{
-	if (UNLIKELY(!msz)) {
-		goto bork;
-	}
-	switch (*msg) {
-	case 'B'/*UY*/:
-	case 'L'/*ONG*/:
-	case 'b'/*uy*/:
-	case 'l'/*ong*/:
-	case 'S'/*ELL|HORT*/:
-	case 's'/*ell|hort*/:
-		return _push_beef_ord(msg, msz);
-	case 'C'/*ANCEL*/:
-	case 'c'/*ANCEL*/:
-		return _push_beef_oid(msg, msz);
-	default:
-		break;
-	}
-bork:
-	return (bmsg_t){BMSG_UNK};
-}
-
+#define SEND_QMSG(fd, x...)						\
+	do {								\
+		char __buf__[256U];					\
+		ssize_t __len__;					\
+		__len__ = send_qmsg(__buf__, sizeof(__buf__), (qmsg_t){x}); \
+		if (LIKELY(__len__ > 0)) {				\
+			(void)send((fd), __buf__, __len__, 0);		\
+		}							\
+	} while (0)
+			
 static void
-send_fill(int s, unxs_exe_t x)
-{
-	char buf[256U];
-	size_t len = (memcpy(buf, "FIL\t", 4U), 4U);
-
-	len += qxtostr(buf + len, sizeof(buf) - len, x.qty);
-	buf[len++] = '\t';
-	len += qxtostr(buf + len, sizeof(buf) - len, x.prc);
-	buf[len++] = '\n';
-	write(s, buf, len);
-	return;
-}
-
-static void
-send_acct(int s, unxs_exa_t x)
-{
-	char buf[256U];
-	size_t len = (memcpy(buf, "ACC\t", 4U), 4U);
-
-	len += qxtostr(buf + len, sizeof(buf) - len, x.base);
-	buf[len++] = '\t';
-	len += qxtostr(buf + len, sizeof(buf) - len, x.term);
-	buf[len++] = '\n';
-	write(s, buf, len);
-	return;
-}
-
-static void
-send_oid(int s, clob_oid_t o)
-{
-	static const char *sids[] = {"ASK ", "BID "};
-	static const char *typs[] = {
-		[TYPE_LMT] = "LMT ",
-		[TYPE_MKT] = "MKT ",
-	};
-	char buf[256U];
-	size_t len = (memcpy(buf, "OID\t", 4U), 4U);
-
-	len += (memcpy(buf + len, typs[o.typ], 4U), 4U);
-	len += (memcpy(buf + len, sids[o.sid], 4U), 4U);
-	len += pxtostr(buf + len, sizeof(buf) - len, o.prc);
-	buf[len++] = ' ';
-	len += snprintf(buf + len, sizeof(buf) - len, "%zu", o.qid);
-	buf[len++] = '\n';
-	write(s, buf, len);
-	return;
-}
-
-static void
-send_beef(int s, unxs_exe_t x)
-{
-	char buf[256U];
-	size_t len = (memcpy(buf, "TRA\t", 4U), 4U);
-
-	len += qxtostr(buf + len, sizeof(buf) - len, x.qty);
-	buf[len++] = '\t';
-	len += qxtostr(buf + len, sizeof(buf) - len, x.prc);
-	buf[len++] = '\n';
-	write(s, buf, len);
-	return;
-}
-
-static void
-send_cake(int s, quos_msg_t m)
-{
-	char buf[256U];
-	size_t len = 0U;
-
-	buf[len++] = (char)('A' + m.sid);
-	buf[len++] = '2';
-	buf[len++] = '\t';
-	len += pxtostr(buf + len, sizeof(buf) - len, m.prc);
-	buf[len++] = '\t';
-	len += qxtostr(buf + len, sizeof(buf) - len, m.new);
-	buf[len++] = '\n';
-	write(s, buf, len);
-	return;
-}
-
-static void
-send_top(int s, quos_msg_t m)
-{
-	char buf[256U];
-	size_t len = 0U;
-
-	buf[len++] = (char)('A' + m.sid);
-	buf[len++] = '1';
-	buf[len++] = '\t';
-	len += pxtostr(buf + len, sizeof(buf) - len, m.prc);
-	buf[len++] = '\t';
-	len += qxtostr(buf + len, sizeof(buf) - len, m.new);
-	buf[len++] = '\n';
-	write(s, buf, len);
-	return;
-}
-
-static void
-send_lvl2(int s)
+prnt_lvl2(int s)
 {
 	char buf[4096U];
 	size_t len = 0U;
@@ -414,7 +216,7 @@ send_lvl2(int s)
 }
 
 static void
-bmsg_add_ord(int fd, clob_ord_t o, const uid_t u)
+omsg_add_ord(int fd, clob_ord_t o, const uid_t u)
 {
 	clob_oid_t oi;
 
@@ -436,22 +238,26 @@ bmsg_add_ord(int fd, clob_ord_t o, const uid_t u)
 			const clob_side_t s =
 				clob_contra_side((clob_side_t)x->s[i]);
 			add_acct(u, unxs_exa(x->x[i], s));
-			send_fill(fd, x->x[i]);
+			SEND_OMSG(fd, OMSG_FIL, .exe = x->x[i]);
 		}
-		/* get the user's account */
-		send_acct(fd, add_acct(u, (unxs_exa_t){0.dd, 0.dd}));
+	}
+	/* get the user's account */
+	with (unxs_exa_t a = add_acct(u, (unxs_exa_t){0.dd, 0.dd})) {
+		SEND_OMSG(fd, OMSG_ACC, .exa = a);
 	}
 	/* let him know about the residual order */
 	if (oi.qid) {
-		send_oid(fd, oi);
+		SEND_OMSG(fd, OMSG_OID, .oid = oi);
 	}
 	return;
 }
 
 static void
-bmsg_del_oid(int UNUSED(fd), clob_oid_t o)
+omsg_del_oid(int fd, clob_oid_t o)
 {
-	clob_del(glob, o);
+	int rc = clob_del(glob, o);
+
+	SEND_OMSG(fd, .typ = !(rc < 0) ? OMSG_KIL : OMSG_NOK, .oid = o);
 	return;
 }
 
@@ -484,14 +290,15 @@ data_cb(EV_P_ ev_io *w, int UNUSED(re))
 	for (const char *x;
 	     (x = memchr(u->buf + npr, '\n', u->bof - npr));
 	     npr = x + 1U - u->buf) {
-		bmsg_t m = push_beef(u->buf + npr, x + 1U - (u->buf + npr));
+		omsg_t m = recv_omsg(u->buf + npr, x + 1U - (u->buf + npr));
 
-		switch (m.type) {
-		case BMSG_ADD_ORD:
-			bmsg_add_ord(u->w.fd, m.ord, u->uid);
+		switch (m.typ) {
+		case OMSG_BUY:
+		case OMSG_SEL:
+			omsg_add_ord(u->w.fd, m.ord, u->uid);
 			break;
-		case BMSG_DEL_OID:
-			bmsg_del_oid(u->w.fd, m.oid);
+		case OMSG_CAN:
+			omsg_del_oid(u->w.fd, m.oid);
 			break;
 		default:
 			break;
@@ -538,23 +345,35 @@ static void
 prep_cb(EV_P_ ev_prepare *UNUSED(p), int UNUSED(re))
 {
 	with (unxs_t x = glob.exe) {
+		char buf[256U];
+		ssize_t len;
+
 		for (size_t i = 0U; i < x->n; i++) {
 			/* let the maker know before anyone else
 			 * well, the taker has already been informed */
 			const uid_t u = x->o[MODE_BI * i + SIDE_MAKER].user;
 			const clob_side_t s = (clob_side_t)x->s[i];
+			unxs_exa_t acc = add_acct(u, unxs_exa(x->x[i], s));
 			int fd = user_sock(u);
-			add_acct(u, unxs_exa(x->x[i], s));
-			send_fill(fd, x->x[i]);
-			send_acct(fd, add_acct(u, (unxs_exa_t){0.dd, 0.dd}));
-			send_beef(STDOUT_FILENO, x->x[i]);
 
+			len = 0U;
+			len += send_omsg(buf + len, sizeof(buf) - len,
+					(omsg_t){OMSG_FIL, .exe = x->x[i]});
+			len += send_omsg(buf + len, sizeof(buf) - len,
+					 (omsg_t){OMSG_ACC, .exa = acc});
+			if (LIKELY(len > 0)) {
+				send(fd, buf, len, 0);
+			}
+		}
+		for (size_t i = 0U; i < x->n; i++) {
+			SEND_QMSG(quot_chan, QMSG_TRA,
+				  .quo = {NSIDES, x->x[i].prc, x->x[i].qty});
 		}
 		unxs_clr(x);
 	}
 	with (quos_t q = glob.quo) {
 		for (size_t i = 0U; i < q->n; i++) {
-			send_cake(quot_chan, q->m[i]);
+			SEND_QMSG(quot_chan, QMSG_LVL, q->m[i]);
 		}
 		if (q->n) {
 			btree_key_t k;
@@ -562,14 +381,14 @@ prep_cb(EV_P_ ev_prepare *UNUSED(p), int UNUSED(re))
 
 			v = btree_top(glob.lmt[SIDE_ASK], &k);
 			if (LIKELY(v != NULL)) {
-				send_top(quot_chan,
-					 (quos_msg_t){SIDE_ASK, k, v->sum.dis});
+				quos_msg_t t = {SIDE_ASK, k, v->sum.dis};
+				SEND_QMSG(quot_chan, QMSG_TOP, t);
 			}
 
 			v = btree_top(glob.lmt[SIDE_BID], &k);
 			if (LIKELY(v != NULL)) {
-				send_top(quot_chan,
-					 (quos_msg_t){SIDE_BID, k, v->sum.dis});
+				quos_msg_t t = {SIDE_BID, k, v->sum.dis};
+				SEND_QMSG(quot_chan, QMSG_TOP, t);
 			}
 		}
 		/* clear them quotes */
@@ -585,7 +404,7 @@ hbeat_cb(EV_P_ ev_timer *UNUSED(w), int UNUSED(revents))
 		return;
 	}
 	/* otherwise print the book */
-	send_lvl2(info_chan);
+	prnt_lvl2(info_chan);
 	return;
 }
 

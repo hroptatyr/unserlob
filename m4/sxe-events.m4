@@ -39,12 +39,14 @@ AC_DEFUN([SXE_CHECK_LIBEV], [
 		[have_libev="no"; ev_LIBS="-lev"])
 	save_CPPFLAGS="${CPPFLAGS}"
 	save_LDFLAGS="${LDFLAGS}"
+	save_LIBS="${LIBS}"
 	CPPFLAGS="$CPPFLAGS $ev_CFLAGS"
 	LDFLAGS="$LDFLAGS $ev_LIBS"
 	AC_CHECK_HEADERS([ev.h])
 	AC_CHECK_LIB([ev], [ev_loop_new])
 	CPPFLAGS="${save_CPPFLAGS}"
 	LDFLAGS="${save_LDFLAGS}"
+	LIBS="${save_LIBS}"
 
 	if test "$ac_cv_header_ev_h" = "yes" -a \
 		"$ac_cv_lib_ev___ev_loop_new$ac_cv_lib_ev_ev_loop_new" = "yes"; then

@@ -8,9 +8,7 @@ AM_LDFLAGS = $(XCCLDFLAGS)
 
 bin_PROGRAMS =
 noinst_PROGRAMS =
-lib_LTLIBRARIES =
-noinst_LTLIBRARIES =
-pkglib_LTLIBRARIES =
+noinst_LIBRARIES =
 noinst_HEADERS =
 BUILT_SOURCES =
 EXTRA_DIST = $(BUILT_SOURCES)
@@ -20,12 +18,25 @@ SUFFIXES =
 CLEANFILES += version.c
 EXTRA_DIST += version.c.in
 
-noinst_LIBRARIES = libdfp.a
+noinst_LIBRARIES += libdfp.a
 libdfp_a_SOURCES =
 libdfp_a_SOURCES += dfp754_d32.c dfp754_d32.h
 libdfp_a_SOURCES += dfp754_d64.c dfp754_d64.h
 libdfp_a_CPPFLAGS = $(AM_CPPFLAGS)
 libdfp_a_CPPFLAGS += $(dfp754_CFLAGS)
+
+noinst_LIBRARIES += liblol.a
+liblol_a_SOURCES =
+liblol_a_SOURCES += lol.c lol.h
+liblol_a_SOURCES += bot.c bot.h
+liblol_a_SOURCES += sock.c sock.h
+liblol_a_CPPFLAGS = $(AM_CPPFLAGS)
+liblol_a_CPPFLAGS += $(ev_CFLAGS)
+liblol_a_CPPFLAGS += $(dfp754_CFLAGS)
+liblol_a_CPPFLAGS += $(clob_CFLAGS)
+liblol_a_LIBADD = libdfp.a
+lol_CFLAGS = $(clob_CFLAGS) $(dfp754_CFLAGS)
+lol_LIBS = $(dfp754_LIBS) $(ev_LIBS) libdfp.a
 
 
 noinst_PROGRAMS += lobot
@@ -39,14 +50,13 @@ lobot_LDFLAGS = $(AM_LDFLAGS)
 lobot_LDFLAGS += $(ev_LIBS)
 lobot_LDFLAGS += $(clob_LIBS)
 lobot_LDFLAGS += $(dfp754_LIBS)
-lobot_LDADD = libdfp.a
+lobot_LDADD = libdfp.a liblol.a
 BUILT_SOURCES += lobot.yucc
 
 noinst_PROGRAMS += hdgbot
 hdgbot_SOURCES = hdgbot.c hdgbot.yuck
 hdgbot_SOURCES += sock.c sock.h
 hdgbot_SOURCES += pcg_basic.c pcg_basic.h
-EXTRA_hdgbot_SOURCES = sock.c
 hdgbot_CPPFLAGS = $(AM_CPPFLAGS)
 hdgbot_CPPFLAGS += $(ev_CFLAGS)
 hdgbot_CPPFLAGS += $(dfp754_CFLAGS)
@@ -58,18 +68,13 @@ BUILT_SOURCES += hdgbot.yucc
 
 noinst_PROGRAMS += egobot
 egobot_SOURCES = egobot.c egobot.yuck
-egobot_SOURCES += sock.c sock.h
-EXTRA_egobot_SOURCES = sock.c
 egobot_CPPFLAGS = $(AM_CPPFLAGS)
+egobot_CPPFLAGS += $(lol_CFLAGS)
 egobot_CPPFLAGS += -mkl
-egobot_CPPFLAGS += $(ev_CFLAGS)
-egobot_CPPFLAGS += $(dfp754_CFLAGS)
-egobot_CPPFLAGS += $(clob_CFLAGS)
 egobot_LDFLAGS = $(AM_LDFLAGS)
+egobot_LDFLAGS += $(lol_LIBS)
 egobot_LDFLAGS += -mkl
-egobot_LDFLAGS += $(ev_LIBS)
-egobot_LDFLAGS += $(dfp754_LIBS)
-egobot_LDADD = libdfp.a
+egobot_LDADD = libdfp.a liblol.a
 BUILT_SOURCES += egobot.yucc
 
 
