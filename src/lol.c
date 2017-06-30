@@ -85,9 +85,9 @@ _recv_oid(const char *msg, size_t UNUSED(msz))
 	default:
 		goto nil;
 	}
-	r.sid = (clob_side_t)(msg[8U] - 'A');
+	r.sid = (clob_side_t)(msg[4U] - 'A');
 	with (char *on) {
-		r.prc = strtopx(msg + 12U, &on);
+		r.prc = strtopx(msg + 8U, &on);
 		if (*on++ != ' ') {
 			goto nil;
 		}
