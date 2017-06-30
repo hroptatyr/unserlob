@@ -20,4 +20,8 @@ extern int run_bots(bot_t, ...);
 extern int
 bot_set_timer(bot_t, double when, double intv);
 
+extern int bot_send(bot_t);
+
+extern int add_omsg(bot_t, omsg_t);
+
 #endif	/* INCLUDED_bot_h_ */
