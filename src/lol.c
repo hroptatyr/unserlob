@@ -49,11 +49,24 @@ send_oid(char *restrict buf, size_t bsz, clob_oid_t oid)
 
 	len += (memcpy(buf + len, typs[oid.typ], 4U), 4U);
 	len += (memcpy(buf + len, sids[oid.sid], 4U), 4U);
-	len += pxtostr(buf + len, sizeof(buf) - len, oid.prc);
+	len += pxtostr(buf + len, bsz - len, oid.prc);
 	buf[len++] = ' ';
-	len += snprintf(buf + len, sizeof(buf) - len, "%zu", oid.qid);
+	len += snprintf(buf + len, bsz - len, "%zu", oid.qid);
 	buf[len++] = '\n';
-	(void)bsz;
+	return len;
+}
+
+static ssize_t
+send_ord(char *restrict buf, size_t bsz, clob_ord_t ord)
+{
+	size_t len = 0U;
+
+	len += qxtostr(buf + len, bsz - len, ord.qty.dis);
+	if (ord.typ == TYPE_LMT) {
+		buf[len++] = '\t';
+		len += pxtostr(buf + len, bsz - len, ord.lmt);
+	}
+	buf[len++] = '\n';
 	return len;
 }
 
@@ -144,10 +157,10 @@ send_omsg(char *restrict buf, size_t bsz, omsg_t msg)
 	switch (msg.typ) {
 	case OMSG_BUY:
 		memcpy(buf, "BUY\t", 4U);
-		return 4U + 0U;
+		return 4U + send_ord(buf + 4U, bsz - 4U, msg.ord);
 	case OMSG_SEL:
 		memcpy(buf, "SEL\t", 4U);
-		return 4U + 0U;
+		return 4U + send_ord(buf + 4U, bsz - 4U, msg.ord);
 	case OMSG_CAN:
 		memcpy(buf, "CAN\t", 4U);
 		return 4U + send_oid(buf + 4U, bsz - 4U, msg.oid);

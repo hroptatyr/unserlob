@@ -27,6 +27,7 @@ typedef struct {
 		OMSG_CAN,
 	} typ;
 	union {
+		clob_ord_t ord;
 		clob_oid_t oid;
 		unxs_exa_t acc;
 	};
