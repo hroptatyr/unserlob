@@ -3,14 +3,9 @@
 #include <unistd.h>
 #include <clob/clob.h>
 #include <clob/unxs.h>
+#include <clob/quos.h>
 
 typedef long unsigned int tv_t;
-
-typedef struct {
-	clob_side_t s;
-	px_t p;
-	qx_t q;
-} lol_quo_t;
 
 typedef struct {
 	enum {
@@ -29,7 +24,8 @@ typedef struct {
 	union {
 		clob_ord_t ord;
 		clob_oid_t oid;
-		unxs_exa_t acc;
+		unxs_exa_t exa;
+		unxs_exe_t exe;
 	};
 } omsg_t;
 
@@ -41,7 +37,7 @@ typedef struct {
 		QMSG_TRA,
 	} typ;
 	union {
-		lol_quo_t quo;
+		quos_msg_t quo;
 	};
 } qmsg_t;
 

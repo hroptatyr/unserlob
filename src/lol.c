@@ -38,7 +38,7 @@
  * <-NOK \t X             response to cancel request, X not killed */
 
 static ssize_t
-send_oid(char *restrict buf, size_t bsz, clob_oid_t oid)
+_send_oid(char *restrict buf, size_t bsz, clob_oid_t oid)
 {
 	static const char *sids[] = {"ASK ", "BID "};
 	static const char *typs[] = {
@@ -52,20 +52,6 @@ send_oid(char *restrict buf, size_t bsz, clob_oid_t oid)
 	len += pxtostr(buf + len, bsz - len, oid.prc);
 	buf[len++] = ' ';
 	len += snprintf(buf + len, bsz - len, "%zu", oid.qid);
-	buf[len++] = '\n';
-	return len;
-}
-
-static ssize_t
-send_ord(char *restrict buf, size_t bsz, clob_ord_t ord)
-{
-	size_t len = 0U;
-
-	len += qxtostr(buf + len, bsz - len, ord.qty.dis);
-	if (ord.typ == TYPE_LMT) {
-		buf[len++] = '\t';
-		len += pxtostr(buf + len, bsz - len, ord.lmt);
-	}
 	buf[len++] = '\n';
 	return len;
 }
@@ -99,8 +85,62 @@ nil:
 	return (clob_oid_t){.qid = 0U};
 }
 
+static ssize_t
+_send_ord(char *restrict buf, size_t bsz, clob_ord_t ord)
+{
+	size_t len = 0U;
+
+	len += qxtostr(buf + len, bsz - len, ord.qty.dis);
+	if (ord.typ == TYPE_LMT) {
+		buf[len++] = '\t';
+		len += pxtostr(buf + len, bsz - len, ord.lmt);
+	}
+	buf[len++] = '\n';
+	return len;
+}
+
+static clob_ord_t
+_recv_ord(const char *msg, size_t UNUSED(msz))
+{
+	clob_ord_t r = {TYPE_MKT};
+	char *on;
+
+	switch (*msg) {
+	case 'B':
+		r.sid = SIDE_LONG;
+		break;
+	case 'S':
+		r.sid = SIDE_SHORT;
+		break;
+	}
+
+	/* read quantity */
+	r.qty.dis = strtoqx(msg + 4U, &on);
+	if (UNLIKELY(*on == '+')) {
+		r.qty.hid = strtoqx(++on, &on);
+	}
+	if (*on++ == '\t') {
+		/* got limit prices as well */
+		r.lmt = strtopx(on, &on);
+		r.typ = TYPE_LMT;
+	}
+	return r;
+}
+
+static ssize_t
+_send_exa(char *restrict buf, size_t bsz, unxs_exa_t a)
+{
+	size_t len = 0U;
+
+	len += qxtostr(buf + len, bsz - len, a.base);
+	buf[len++] = '\t';
+	len += qxtostr(buf + len, bsz - len, a.term);
+	buf[len++] = '\n';
+	return len;
+}
+
 static unxs_exa_t
-_recv_acc(const char *msg, size_t UNUSED(msz))
+_recv_exa(const char *msg, size_t UNUSED(msz))
 {
 	unxs_exa_t r;
 	char *on;
@@ -115,38 +155,66 @@ nil:
 	return (unxs_exa_t){};
 }
 
-static lol_quo_t
-_recv_tra(const char *msg, size_t UNUSED(msz))
+static ssize_t
+_send_exe(char *restrict buf, size_t bsz, unxs_exe_t x)
 {
-	lol_quo_t r = {NSIDES};
-	char *on;
+	size_t len = 0U;
 
-	r.p = strtopx(msg, &on);
-	if (*on++ != '\t') {
-		goto nil;
-	}
-	r.q = strtoqx(on, &on);
-	return r;
-nil:
-	return (lol_quo_t){NSIDES, NANPX, NANQX};
+	len += qxtostr(buf + len, bsz - len, x.qty);
+	buf[len++] = '\t';
+	len += pxtostr(buf + len, bsz - len, x.prc);
+	buf[len++] = '\n';
+	return len;
 }
 
-static lol_quo_t
-_recv_quo(const char *msg, size_t UNUSED(msz))
+static unxs_exe_t
+_recv_exe(const char *msg, size_t UNUSED(msz))
 {
-	lol_quo_t r;
+	unxs_exe_t r;
 	char *on;
 
-	r.s = (clob_side_t)(*msg - 'A');
-	r.p = strtopx(msg + 3U, &on);
+	r.qty = strtoqx(msg, &on);
 	if (*on++ != '\t') {
 		goto nil;
 	}
-	r.q = strtoqx(on, &on);
+	r.prc = strtopx(on, &on);
 	return r;
 nil:
-	r.p = NANPX;
-	r.q = NANQX;
+	return (unxs_exe_t){NANQX, NANPX};
+}
+
+static quos_msg_t
+_recv_tra(const char *msg, size_t UNUSED(msz))
+{
+	quos_msg_t r = {NSIDES};
+	char *on;
+
+	r.prc = strtopx(msg, &on);
+	if (*on++ != '\t') {
+		goto nil;
+	}
+	r.new = strtoqx(on, &on);
+	return r;
+nil:
+	return (quos_msg_t){NSIDES, NANPX, NANQX};
+}
+
+static quos_msg_t
+_recv_quo(const char *msg, size_t UNUSED(msz))
+{
+	quos_msg_t r;
+	char *on;
+
+	r.sid = (clob_side_t)(*msg - 'A');
+	r.prc = strtopx(msg + 3U, &on);
+	if (*on++ != '\t') {
+		goto nil;
+	}
+	r.new = strtoqx(on, &on);
+	return r;
+nil:
+	r.prc = NANPX;
+	r.new = NANQX;
 	return r;
 }
 
@@ -157,13 +225,29 @@ send_omsg(char *restrict buf, size_t bsz, omsg_t msg)
 	switch (msg.typ) {
 	case OMSG_BUY:
 		memcpy(buf, "BUY\t", 4U);
-		return 4U + send_ord(buf + 4U, bsz - 4U, msg.ord);
+		return 4U + _send_ord(buf + 4U, bsz - 4U, msg.ord);
 	case OMSG_SEL:
 		memcpy(buf, "SEL\t", 4U);
-		return 4U + send_ord(buf + 4U, bsz - 4U, msg.ord);
+		return 4U + _send_ord(buf + 4U, bsz - 4U, msg.ord);
 	case OMSG_CAN:
 		memcpy(buf, "CAN\t", 4U);
-		return 4U + send_oid(buf + 4U, bsz - 4U, msg.oid);
+		return 4U + _send_oid(buf + 4U, bsz - 4U, msg.oid);
+
+	case OMSG_ACC:
+		memcpy(buf, "ACC\t", 4U);
+		return 4U + _send_exa(buf + 4U, bsz - 4U, msg.exa);
+	case OMSG_FIL:
+		memcpy(buf, "FIL\t", 4U);
+		return 4U + _send_exe(buf + 4U, bsz - 4U, msg.exe);
+	case OMSG_KIL:
+		memcpy(buf, "KIL\t", 4U);
+		return 4U + _send_oid(buf + 4U, bsz - 4U, msg.oid);
+	case OMSG_NOK:
+		memcpy(buf, "NOK\t", 4U);
+		return 4U + _send_oid(buf + 4U, bsz - 4U, msg.oid);
+	case OMSG_OID:
+		memcpy(buf, "OID\t", 4U);
+		return 4U + _send_oid(buf + 4U, bsz - 4U, msg.oid);
 
 	default:
 		/* can't send them other guys */
@@ -180,15 +264,49 @@ recv_omsg(const char *msg, size_t msz)
 	} else if (!memcmp(msg, "OID\t", 4U)) {
 		return (omsg_t){OMSG_OID, .oid = _recv_oid(msg + 4U, msz - 4U)};
 	} else if (!memcmp(msg, "ACC\t", 4U)) {
-		return (omsg_t){OMSG_ACC, .acc = _recv_acc(msg + 4U, msz - 4U)};
+		return (omsg_t){OMSG_ACC, .exa = _recv_exa(msg + 4U, msz - 4U)};
 	} else if (!memcmp(msg, "FIL\t", 4U)) {
-		return (omsg_t){OMSG_FIL, .oid = _recv_oid(msg + 4U, msz - 4U)};
+		return (omsg_t){OMSG_FIL, .exe = _recv_exe(msg + 4U, msz - 4U)};
 	} else if (!memcmp(msg, "KIL\t", 4U)) {
 		return (omsg_t){OMSG_KIL, .oid = _recv_oid(msg + 4U, msz - 4U)};
 	} else if (!memcmp(msg, "NOK\t", 4U)) {
 		return (omsg_t){OMSG_NOK, .oid = _recv_oid(msg + 4U, msz - 4U)};
+	} else if (!memcmp(msg, "BUY\t", 4U)) {
+		return (omsg_t){OMSG_BUY, .ord = _recv_ord(msg + 0U, msz - 0U)};
+	} else if (!memcmp(msg, "SEL\t", 4U)) {
+		return (omsg_t){OMSG_SEL, .ord = _recv_ord(msg + 0U, msz - 0U)};
+	} else if (!memcmp(msg, "CAN\t", 4U)) {
+		return (omsg_t){OMSG_CAN, .oid = _recv_oid(msg + 4U, msz - 4U)};
 	}
 	return (omsg_t){OMSG_UNK};
+}
+
+ssize_t
+send_qmsg(char *restrict buf, size_t bsz, qmsg_t msg)
+{
+	size_t len = 0U;
+
+	switch (msg.quo.sid) {
+	case SIDE_ASK:
+	case SIDE_BID:
+		buf[len++] = (char)(msg.quo.sid + 'A');
+		buf[len++] = (char)(msg.typ ^ '0');
+		buf[len++] = '\t';
+		goto quo;;
+	default:
+		if (msg.typ != QMSG_TRA) {
+			return 0;
+		}
+		len = (memcpy(buf + len, "TRA\t", 4U), 4U);
+		goto quo;
+
+	quo:
+		len += pxtostr(buf + len, bsz - len, msg.quo.prc);
+		buf[len++] = '\t';
+		len += qxtostr(buf + len, bsz - len, msg.quo.new);
+		buf[len++] = '\n';
+	}
+	return len;
 }
 
 qmsg_t

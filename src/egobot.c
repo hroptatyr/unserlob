@@ -16,7 +16,7 @@ static double mktv = 0.;
 static px_t sprd = 0.02dd;
 
 static clob_oid_t coid[NSIDES];
-static lol_quo_t cquo[NSIDES];
+static quos_msg_t cquo[NSIDES];
 
 
 static int
@@ -57,9 +57,9 @@ qchan_cb(bot_t UNUSED(b), qmsg_t m)
 {
 	switch (m.typ) {
 	case QMSG_TOP:
-		cquo[m.quo.s] = m.quo;
+		cquo[m.quo.sid] = m.quo;
 		/* calc mktv as well */
-		mktv = (cquo[SIDE_ASK].p + cquo[SIDE_BID].p) / 2.dd;
+		mktv = (cquo[SIDE_ASK].prc + cquo[SIDE_BID].prc) / 2.dd;
 		break;
 	default:
 		break;
