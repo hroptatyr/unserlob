@@ -36,7 +36,7 @@ liblol_a_CPPFLAGS += $(dfp754_CFLAGS)
 liblol_a_CPPFLAGS += $(clob_CFLAGS)
 liblol_a_LIBADD = libdfp.a
 lol_CFLAGS = $(clob_CFLAGS) $(dfp754_CFLAGS)
-lol_LIBS = $(dfp754_LIBS) $(ev_LIBS)
+lol_LIBS = $(dfp754_LIBS) $(ev_LIBS) libdfp.a
 
 
 noinst_PROGRAMS += lobot
@@ -50,7 +50,7 @@ lobot_LDFLAGS = $(AM_LDFLAGS)
 lobot_LDFLAGS += $(ev_LIBS)
 lobot_LDFLAGS += $(clob_LIBS)
 lobot_LDFLAGS += $(dfp754_LIBS)
-lobot_LDADD = libdfp.a
+lobot_LDADD = libdfp.a liblol.a
 BUILT_SOURCES += lobot.yucc
 
 noinst_PROGRAMS += hdgbot
@@ -68,17 +68,13 @@ BUILT_SOURCES += hdgbot.yucc
 
 noinst_PROGRAMS += egobot
 egobot_SOURCES = egobot.c egobot.yuck
-egobot_SOURCES += sock.c sock.h
 egobot_CPPFLAGS = $(AM_CPPFLAGS)
+egobot_CPPFLAGS += $(lol_CFLAGS)
 egobot_CPPFLAGS += -mkl
-egobot_CPPFLAGS += $(ev_CFLAGS)
-egobot_CPPFLAGS += $(dfp754_CFLAGS)
-egobot_CPPFLAGS += $(clob_CFLAGS)
 egobot_LDFLAGS = $(AM_LDFLAGS)
+egobot_LDFLAGS += $(lol_LIBS)
 egobot_LDFLAGS += -mkl
-egobot_LDFLAGS += $(ev_LIBS)
-egobot_LDFLAGS += $(dfp754_LIBS)
-egobot_LDADD = libdfp.a
+egobot_LDADD = libdfp.a liblol.a
 BUILT_SOURCES += egobot.yucc
 
 
