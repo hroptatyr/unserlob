@@ -41,10 +41,13 @@ struct _bot_s {
 #define BUFOFF		(offsetof(struct _bot_s, buf))
 #define QBOF0		(0U)
 #define QBOFZ		(BOTSIZ / 4U - BUFOFF)
+#define QBUF(b)		((b) + QBOF0)
 #define OBOF0		(BOTSIZ / 4U - BUFOFF)
 #define OBOFZ		(BOTSIZ - OBOF0)
+#define OBUF(b)		((b) + OBOF0)
 #define MBOF0		(BOTSIZ / 2U - BUFOFF)
 #define MBOFZ		(BOTSIZ - MBOF0)
+#define MBUF(b)		((b) + MBOF0)
 
 
 static __attribute__((format(printf, 1, 2))) void
@@ -81,10 +84,11 @@ _och_cb(EV_P_ ev_io *w, int UNUSED(re))
 {
 /* something went on in the exec channel */
 	struct _bot_s *r = w->data;
-	size_t npr = OBOF0;
+	char *buf = OBUF(r->buf);
+	size_t npr = 0U;
 	ssize_t nrd;
 
-	nrd = recv(w->fd, r->buf + r->obof, OBOFZ - r->obof, 0);
+	nrd = recv(w->fd, buf + r->obof, OBOFZ - r->obof, 0);
 	if (UNLIKELY(nrd <= 0)) {
 		return;
 	} else if (r->parent.ochan_cb == NULL) {
@@ -94,21 +98,20 @@ _och_cb(EV_P_ ev_io *w, int UNUSED(re))
 	r->obof += nrd;
 	/* now snarf the line */
 	for (const char *x;
-	     (x = memchr(r->buf + npr, '\n', r->obof - npr));
-	     npr = x + 1U - r->buf) {
-		omsg_t m = recv_omsg(r->buf + npr, x + 1U - (r->buf + npr));
+	     (x = memchr(buf + npr, '\n', r->obof - npr));
+	     npr = x + 1U - buf) {
+		omsg_t m = recv_omsg(buf + npr, x + 1U - (buf + npr));
 
 		r->parent.ochan_cb((void*)r, m);
 	}
 	/* move left-overs */
 	if (r->obof > npr) {
-		memmove(r->buf + OBOF0, r->buf + npr, r->obof - npr);
+		memmove(buf, buf + npr, r->obof - npr);
 		r->obof -= npr;
 	} else {
 	reset:
 		r->obof = 0U;
 	}
-	r->obof += OBOF0;
 	return;
 }
 
@@ -117,10 +120,11 @@ _qch_cb(EV_P_ ev_io *w, int UNUSED(re))
 {
 /* something went on in the quote channel */
 	struct _bot_s *r = w->data;
-	size_t npr = QBOF0;
+	char *buf = QBUF(r->buf);
+	size_t npr = 0U;
 	ssize_t nrd;
 
-	nrd = recv(w->fd, r->buf + r->qbof, QBOFZ - r->qbof, 0);
+	nrd = recv(w->fd, buf + r->qbof, QBOFZ - r->qbof, 0);
 	if (UNLIKELY(nrd <= 0)) {
 		return;
 	} else if (r->parent.qchan_cb == NULL) {
@@ -130,21 +134,20 @@ _qch_cb(EV_P_ ev_io *w, int UNUSED(re))
 	r->qbof += nrd;
 	/* now snarf the line */
 	for (const char *x;
-	     (x = memchr(r->buf + npr, '\n', r->qbof - npr));
-	     npr = x + 1U - r->buf) {
-		qmsg_t m = recv_qmsg(r->buf + npr, x + 1U - (r->buf + npr));
+	     (x = memchr(buf + npr, '\n', r->qbof - npr));
+	     npr = x + 1U - buf) {
+		qmsg_t m = recv_qmsg(buf + npr, x + 1U - (buf + npr));
 
 		r->parent.qchan_cb((void*)r, m);
 	}
 	/* move left-overs */
 	if (r->qbof > npr) {
-		memmove(r->buf + QBOF0, r->buf + npr, r->qbof - npr);
+		memmove(buf, buf + npr, r->qbof - npr);
 		r->qbof -= npr;
 	} else {
 	reset:
 		r->qbof = 0U;
 	}
-	r->qbof += QBOF0;
 	return;
 }
 
@@ -171,9 +174,6 @@ Error: cannot open socket for execution messages");
 	/* get ourself a shiny new block of memory */
 	r = malloc(BOTSIZ);
 	memset(r, 0, offsetof(struct _bot_s, buf));
-	r->mbof = MBOF0;
-	r->qbof = QBOF0;
-	r->obof = OBOF0;
 	/* don't set up qch yet, see if they install a callback */
 	r->qch->fd = -1;
 	/* hook into our event loop */
@@ -256,6 +256,7 @@ int
 add_omsg(bot_t b, omsg_t msg)
 {
 	struct _bot_s *r = (void*)b;
+	char *buf = MBUF(r->buf);
 	ssize_t nwr;
 
 	/* message massage */
@@ -271,13 +272,11 @@ add_omsg(bot_t b, omsg_t msg)
 	}
 
 	/* try and serialise */
-	nwr = send_omsg(r->buf + r->mbof, MBOFZ - r->mbof, msg);
+	nwr = send_omsg(buf + r->mbof, MBOFZ - r->mbof, msg);
 	if (UNLIKELY(nwr <= 0)) {
 		/* fuck */
-		puts("FUCK");
 		return -1;
 	}
-	printf("MBOF <- %zu\n", r->mbof + nwr);
 	r->mbof += nwr;
 	return 0;
 }
@@ -286,13 +285,14 @@ int
 bot_send(bot_t b)
 {
 	struct _bot_s *r = (void*)b;
+	const char *buf = MBUF(r->buf);
 	int rc;
 
-	if (r->mbof <= MBOF0) {
+	if (UNLIKELY(!r->mbof)) {
 		return 0;
 	}
-	rc = send(r->och->fd, r->buf + MBOF0, r->mbof - MBOF0, 0) > 0;
-	r->mbof = MBOF0;
+	rc = send(r->och->fd, buf, r->mbof, 0) > 0;
+	r->mbof = 0U;
 	return rc - 1;
 }
 
