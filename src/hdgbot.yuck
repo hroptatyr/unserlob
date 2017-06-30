@@ -1,0 +1,5 @@
+Usage: hdgbot
+
+Trading bot that randomly sends out orders.
+
+  -H, --host=NAME       Connect to NAME.

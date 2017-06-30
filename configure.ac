@@ -42,6 +42,10 @@ AC_CONFIG_LINKS([GNUmakefile:GNUmakefile])
 ## check for decimals
 SXE_CHECK_DFP754
 
+## check for libev
+SXE_CHECK_LIBEV
+AM_CONDITIONAL([HAVE_LIBEV], [test "${have_libev}" = "yes"])
+
 PKG_CHECK_MODULES([clob], [clob])
 
 ## output
