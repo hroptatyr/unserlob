@@ -216,6 +216,23 @@ prnt_lvl2(int s)
 }
 
 static void
+prnt_acct(int s)
+{
+	char buf[4096U];
+	size_t len = 0U;
+
+	for (size_t i = 1U; i <= nuser; i++) {
+		len += qxtostr(buf + len, sizeof(buf) - len, accts[i - 1].base);
+		buf[len++] = '/';
+		len += qxtostr(buf + len, sizeof(buf) - len, accts[i - 1].term);
+		buf[len++] = ' ';
+	}
+	buf[len++] = '\n';
+	write(s, buf, len);
+	return;
+}
+
+static void
 omsg_add_ord(int fd, clob_ord_t o, const uid_t u)
 {
 	clob_oid_t oi;
@@ -405,6 +422,7 @@ hbeat_cb(EV_P_ ev_timer *UNUSED(w), int UNUSED(revents))
 	}
 	/* otherwise print the book */
 	prnt_lvl2(info_chan);
+	prnt_acct(info_chan);
 	return;
 }
 
