@@ -118,6 +118,8 @@ _recv_ord(const char *msg, size_t UNUSED(msz))
 	r.qty.dis = strtoqx(msg + 4U, &on);
 	if (UNLIKELY(*on == '+')) {
 		r.qty.hid = strtoqx(++on, &on);
+	} else {
+		r.qty.hid = 0.dd;
 	}
 	if (*on++ == '\t') {
 		/* got limit prices as well */
