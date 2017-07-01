@@ -53,18 +53,15 @@ lobot_LDFLAGS += $(dfp754_LIBS)
 lobot_LDADD = libdfp.a liblol.a
 BUILT_SOURCES += lobot.yucc
 
-noinst_PROGRAMS += hdgbot
-hdgbot_SOURCES = hdgbot.c hdgbot.yuck
-hdgbot_SOURCES += sock.c sock.h
-hdgbot_SOURCES += pcg_basic.c pcg_basic.h
-hdgbot_CPPFLAGS = $(AM_CPPFLAGS)
-hdgbot_CPPFLAGS += $(ev_CFLAGS)
-hdgbot_CPPFLAGS += $(dfp754_CFLAGS)
-hdgbot_LDFLAGS = $(AM_LDFLAGS)
-hdgbot_LDFLAGS += $(ev_LIBS)
-hdgbot_LDFLAGS += $(dfp754_LIBS)
-hdgbot_LDADD = libdfp.a
-BUILT_SOURCES += hdgbot.yucc
+noinst_PROGRAMS += monkey
+monkey_SOURCES = monkey.c monkey.yuck
+monkey_SOURCES += pcg_basic.c pcg_basic.h
+monkey_CPPFLAGS = $(AM_CPPFLAGS)
+monkey_CPPFLAGS += $(lol_CFLAGS)
+monkey_LDFLAGS = $(AM_LDFLAGS)
+monkey_LDFLAGS += $(lol_LIBS)
+monkey_LDADD = libdfp.a liblol.a
+BUILT_SOURCES += monkey.yucc
 
 noinst_PROGRAMS += egobot
 egobot_SOURCES = egobot.c egobot.yuck

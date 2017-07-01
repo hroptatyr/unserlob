@@ -130,7 +130,7 @@ hbeat_cb(EV_P_ ev_timer *UNUSED(w), int UNUSED(re))
 }
 
 
-#include "hdgbot.yucc"
+#include "monkey.yucc"
 
 int
 main(int argc, char *argv[])
