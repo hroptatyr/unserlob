@@ -28,21 +28,22 @@ static void
 hbeat_cb(bot_t b)
 {
 /* generate a random trade */
-	unsigned int q = pcg32_boundedrand(5U) + 1U;
+	unsigned int x = pcg32_random();
+	qx_t q = 0.dd;
 	omsg_t m;
 
-	switch (pcg32_boundedrand(3U)) {
-	case 0U:
+	for (size_t i = 0U; i < 5U; i++, x >>= 1U) {
+		q += x & 0b1U ? 100.dd : -100.dd;
+	}
+	if (q > 0.dd) {
 		m.typ = OMSG_BUY;
-		break;
-	case 1U:
+	} else if (q < 0.dd) {
 		m.typ = OMSG_SEL;
-		break;
-	default:
+	} else {
 		/* not today then */
 		return;
 	}
-	m.ord = (clob_ord_t){TYPE_MKT, .qty = {q * 100.dd, 0.dd}};
+	m.ord = (clob_ord_t){TYPE_MKT, .qty = {q, 0.dd}};
 	add_omsg(b, m);
 	bot_send(b);
 	return;
