@@ -249,19 +249,6 @@ omsg_add_ord(int fd, clob_ord_t o, const uid_t u)
 	o.user = u;
 	/* continuous trading */
 	oi = unxs_order(glob, o, NANPX);
-	/* all fills concern him so tell him */
-	with (unxs_t x = glob.exe) {
-		for (size_t i = 0U; i < x->n; i++) {
-			const clob_side_t s =
-				clob_contra_side((clob_side_t)x->s[i]);
-			add_acct(u, unxs_exa(x->x[i], s));
-			SEND_OMSG(fd, OMSG_FIL, .exe = x->x[i]);
-		}
-	}
-	/* get the user's account */
-	with (unxs_exa_t a = add_acct(u, (unxs_exa_t){0.dd, 0.dd})) {
-		SEND_OMSG(fd, OMSG_ACC, .exa = a);
-	}
 	/* let him know about the residual order */
 	if (oi.qid) {
 		SEND_OMSG(fd, OMSG_OID, .oid = oi);
@@ -369,9 +356,11 @@ prep_cb(EV_P_ ev_prepare *UNUSED(p), int UNUSED(re))
 			/* let the maker know before anyone else
 			 * well, the taker has already been informed */
 			const uid_t u = x->o[MODE_BI * i + SIDE_MAKER].user;
+			const uid_t cu = x->o[MODE_BI * i + SIDE_TAKER].user;
 			const clob_side_t s = (clob_side_t)x->s[i];
+			const clob_side_t cs = clob_contra_side(s);
 			unxs_exa_t acc = add_acct(u, unxs_exa(x->x[i], s));
-			int fd = user_sock(u);
+			unxs_exa_t cacc = add_acct(cu, unxs_exa(x->x[i], cs));
 
 			len = 0U;
 			len += send_omsg(buf + len, sizeof(buf) - len,
@@ -379,7 +368,16 @@ prep_cb(EV_P_ ev_prepare *UNUSED(p), int UNUSED(re))
 			len += send_omsg(buf + len, sizeof(buf) - len,
 					 (omsg_t){OMSG_ACC, .exa = acc});
 			if (LIKELY(len > 0)) {
-				send(fd, buf, len, 0);
+				send(user_sock(u), buf, len, 0);
+			}
+
+			len = 0U;
+			len += send_omsg(buf + len, sizeof(buf) - len,
+					(omsg_t){OMSG_FIL, .exe = x->x[i]});
+			len += send_omsg(buf + len, sizeof(buf) - len,
+					 (omsg_t){OMSG_ACC, .exa = cacc});
+			if (LIKELY(len > 0)) {
+				send(user_sock(cu), buf, len, 0);
 			}
 		}
 		for (size_t i = 0U; i < x->n; i++) {
