@@ -3,3 +3,4 @@ Usage: egobot
 Trading bot that randomly sends out orders.
 
   -H, --host=NAME       Connect to NAME.
+  -F, --freq=I          Send orders every I seconds, default: 1.0

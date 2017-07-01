@@ -108,6 +108,7 @@ main(int argc, char *argv[])
 {
 	static yuck_t argi[1U];
 	const char *host = "localhost";
+	double freq = 1.0;
 	int rc = 0;
 	bot_t b;
 
@@ -120,6 +121,10 @@ main(int argc, char *argv[])
 		host = argi->host_arg;
 	}
 
+	if (argi->freq_arg) {
+		freq = strtod(argi->freq_arg, NULL);
+	}
+
 	init_rng(0ULL);
 
 	/* initialise the bot */
@@ -128,7 +133,7 @@ main(int argc, char *argv[])
 	}
 
 	b->timer_cb = hbeat_cb;
-	bot_set_timer(b, 1.0, 1.0);
+	bot_set_timer(b, 0., freq);
 
 	b->ochan_cb = ochan_cb;
 	b->qchan_cb = qchan_cb;
