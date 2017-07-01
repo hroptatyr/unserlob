@@ -317,10 +317,10 @@ data_cb(EV_P_ ev_io *w, int UNUSED(re))
 
 clo:
 	fsync(w->fd);
+	kill_user((uintptr_t)w->data);
 	ev_io_stop(EV_A_ w);
 	shutdown(w->fd, SHUT_RDWR);
 	close(w->fd);
-	kill_user((uintptr_t)w->data);
 	free(w);
 	return;
 }
