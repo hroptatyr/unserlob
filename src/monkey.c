@@ -39,6 +39,7 @@ hbeat_cb(bot_t b)
 		m.typ = OMSG_BUY;
 	} else if (q < 0.dd) {
 		m.typ = OMSG_SEL;
+		q = -q;
 	} else {
 		/* not today then */
 		return;
