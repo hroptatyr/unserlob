@@ -342,6 +342,7 @@ beef_cb(EV_P_ ev_io *w, int UNUSED(re))
         ev_io_init(&aw->w, data_cb, ns, EV_READ);
         ev_io_start(EV_A_ &aw->w);
 	aw->uid = add_user(ns);
+	aw->bof = 0;
 	return;
 }
 
