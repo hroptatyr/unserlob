@@ -585,10 +585,10 @@ Error: cannot run in daemon mode");
 				zinstr *= 2U;
 				instr = realloc(instr, zinstr * sizeof(*instr));
 			}
-			memcpy(instr + insoff, argi->args[i], z + 1U);
+			memcpy(instr + insoff, argi->args[i], z);
 			instz[i] = insoff;
 			insth[i] = hash(argi->args[i], z);
-			insoff += z + 1U;
+			insoff += z;
 		}
 		instz[argi->nargs] = insoff;
 	} else {
