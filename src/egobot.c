@@ -10,6 +10,11 @@
 #include "bot.h"
 #include "nifty.h"
 
+#define strtoqx		strtod64
+#define strtopx		strtod64
+#define qxtostr		d64tostr
+#define pxtostr		d64tostr
+
 static VSLStreamStatePtr rstr;
 static double alpha = 1.;
 static double sigma = 1.;
@@ -129,6 +134,10 @@ main(int argc, char *argv[])
 	if (argi->nargs) {
 		cont = *argi->args;
 		conz = strlen(cont);
+	}
+
+	if (argi->spread_arg) {
+		sprd = strtopx(argi->spread_arg, NULL);
 	}
 
 	if (argi->host_arg) {
