@@ -1,4 +1,4 @@
-Usage: lobot
+Usage: lobot [INSTR...]
 
 Run the clob engine (in continuous trading mode).
 

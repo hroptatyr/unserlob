@@ -208,6 +208,10 @@ kill_bot(bot_t b)
 {
 	struct _bot_s *r = (void*)b;
 
+	ev_signal_stop(EV_A_ r->pip);
+	ev_signal_stop(EV_A_ r->itr);
+	ev_signal_stop(EV_A_ r->trm);
+
 	with (int s = r->och->fd) {
 		ev_io_stop(EV_A_ r->och);
 		setsock_linger(s, 1);

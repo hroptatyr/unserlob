@@ -10,6 +10,10 @@
 #include "bot.h"
 #include "nifty.h"
 
+static const char *cont;
+static size_t conz;
+#define INS		.ins = cont, .inz = conz
+
 
 static int
 init_rng(uint64_t seed)
@@ -30,7 +34,7 @@ hbeat_cb(bot_t b)
 /* generate a random trade */
 	unsigned int x = pcg32_random();
 	qx_t q = 0.dd;
-	omsg_t m;
+	omsg_t m = {INS};
 
 	for (size_t i = 0U; i < 5U; i++, x >>= 1U) {
 		q += x & 0b1U ? 100.dd : -100.dd;
@@ -65,6 +69,11 @@ main(int argc, char *argv[])
 	if (yuck_parse(argi, argc, argv) < 0) {
 		rc = 1;
 		goto out;
+	}
+
+	if (argi->nargs) {
+		cont = *argi->args;
+		conz = strlen(cont);
 	}
 
 	if (argi->host_arg) {

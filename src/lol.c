@@ -28,14 +28,14 @@
  * <-TRA     trade
  *
  * OMSGs (wire):
- * ->BUY \t Q[+H] [\t P]  buy Q quantities at P or market, H is hidden
- * ->SEL \t Q[+H] [\t P]  sell Q quantities at P or market, H is hidden
- * <-FIL \t Q \t P        Q quantities got filled at P
- * <-ACC \t B \t T        account balance is B base and T terms
- * <-OID \t X             order was accepted with id X
- * ->CAN \t X             cancel order X
- * <-KIL \t X             response to cancel request, killed X
- * <-NOK \t X             response to cancel request, X not killed */
+ * ->BUY \t INS \t Q[+H] [\t P]  buy Q quantities at P or market, H is hidden
+ * ->SEL \t INS \t Q[+H] [\t P]  sell Q quantities at P or market, H is hidden
+ * <-FIL \t INS \t Q \t P        Q quantities got filled at P
+ * <-ACC \t INS \t B \t T        account balance is B base and T terms
+ * <-OID \t INS \t X             order was accepted with id X
+ * ->CAN \t INS \t X             cancel order X
+ * <-KIL \t INS \t X             response to cancel request, killed X
+ * <-NOK \t INS \t X             response to cancel request, X not killed */
 
 static ssize_t
 _send_oid(char *restrict buf, size_t bsz, clob_oid_t oid)
@@ -100,7 +100,7 @@ _send_ord(char *restrict buf, size_t bsz, clob_ord_t ord)
 }
 
 static clob_ord_t
-_recv_ord(const char *msg, size_t UNUSED(msz))
+_recv_ord(const char *msg, const char *ord, size_t UNUSED(msz))
 {
 	clob_ord_t r = {TYPE_MKT};
 	char *on;
@@ -115,7 +115,7 @@ _recv_ord(const char *msg, size_t UNUSED(msz))
 	}
 
 	/* read quantity */
-	r.qty.dis = strtoqx(msg + 4U, &on);
+	r.qty.dis = strtoqx(ord, &on);
 	if (UNLIKELY(*on == '+')) {
 		r.qty.hid = strtoqx(++on, &on);
 	} else {
@@ -202,13 +202,13 @@ nil:
 }
 
 static quos_msg_t
-_recv_quo(const char *msg, size_t UNUSED(msz))
+_recv_quo(const char *msg, const char *quo, size_t UNUSED(msz))
 {
 	quos_msg_t r;
 	char *on;
 
 	r.sid = (clob_side_t)(*msg - 'A');
-	r.prc = strtopx(msg + 3U, &on);
+	r.prc = strtopx(quo, &on);
 	if (*on++ != '\t') {
 		goto nil;
 	}
@@ -224,35 +224,35 @@ nil:
 ssize_t
 send_omsg(char *restrict buf, size_t bsz, omsg_t msg)
 {
+	/* must be the same order as omsg enum */
+	static const char typ[] = "\
+UNK\tACC\tFIL\tKIL\tNOK\tOID\tBUY\tSEL\tCAN\tORD\t";
+	size_t len = 0U;
+
+	len += (memcpy(buf, typ + 4U * msg.typ, 4U), 4U);
+	len += (memcpy(buf + 4U, msg.ins, msg.inz), msg.inz);
+	buf[len++] = '\t';
+
 	switch (msg.typ) {
 	case OMSG_BUY:
-		memcpy(buf, "BUY\t", 4U);
-		return 4U + _send_ord(buf + 4U, bsz - 4U, msg.ord);
+		return len + _send_ord(buf + len, bsz - len, msg.ord);
 	case OMSG_SEL:
-		memcpy(buf, "SEL\t", 4U);
-		return 4U + _send_ord(buf + 4U, bsz - 4U, msg.ord);
+		return len + _send_ord(buf + len, bsz - len, msg.ord);
 	case OMSG_CAN:
-		memcpy(buf, "CAN\t", 4U);
-		return 4U + _send_oid(buf + 4U, bsz - 4U, msg.oid);
+		return len + _send_oid(buf + len, bsz - len, msg.oid);
 	case OMSG_ORD:
-		memcpy(buf, (const char*[]){"SEL\t","BUY\t"}[msg.ord.sid], 4U);
-		return 4U + _send_ord(buf + 4U, bsz - 4U, msg.ord);
+		return len + _send_ord(buf + len, bsz - len, msg.ord);
 
 	case OMSG_ACC:
-		memcpy(buf, "ACC\t", 4U);
-		return 4U + _send_exa(buf + 4U, bsz - 4U, msg.exa);
+		return len + _send_exa(buf + len, bsz - len, msg.exa);
 	case OMSG_FIL:
-		memcpy(buf, "FIL\t", 4U);
-		return 4U + _send_exe(buf + 4U, bsz - 4U, msg.exe);
+		return len + _send_exe(buf + len, bsz - len, msg.exe);
 	case OMSG_KIL:
-		memcpy(buf, "KIL\t", 4U);
-		return 4U + _send_oid(buf + 4U, bsz - 4U, msg.oid);
+		return len + _send_oid(buf + len, bsz - len, msg.oid);
 	case OMSG_NOK:
-		memcpy(buf, "NOK\t", 4U);
-		return 4U + _send_oid(buf + 4U, bsz - 4U, msg.oid);
+		return len + _send_oid(buf + len, bsz - len, msg.oid);
 	case OMSG_OID:
-		memcpy(buf, "OID\t", 4U);
-		return 4U + _send_oid(buf + 4U, bsz - 4U, msg.oid);
+		return len + _send_oid(buf + len, bsz - len, msg.oid);
 
 	default:
 		/* can't send them other guys */
@@ -264,24 +264,37 @@ send_omsg(char *restrict buf, size_t bsz, omsg_t msg)
 omsg_t
 recv_omsg(const char *msg, size_t msz)
 {
-	if (0) {
+	const char *ins, *eoi;
+
+	eoi = memchr(ins = msg + 4U, '\t', msz - 4U);
+	msz -= eoi - msg;
+
+	if (UNLIKELY(eoi == NULL)) {
 		;
 	} else if (!memcmp(msg, "OID\t", 4U)) {
-		return (omsg_t){OMSG_OID, .oid = _recv_oid(msg + 4U, msz - 4U)};
+		return (omsg_t){OMSG_OID, .ins = ins, .inz = eoi - ins,
+				.oid = _recv_oid(eoi + 1U, msz - 1U)};
 	} else if (!memcmp(msg, "ACC\t", 4U)) {
-		return (omsg_t){OMSG_ACC, .exa = _recv_exa(msg + 4U, msz - 4U)};
+		return (omsg_t){OMSG_ACC, .ins = ins, .inz = eoi - ins,
+				.exa = _recv_exa(eoi + 1U, msz - 1U)};
 	} else if (!memcmp(msg, "FIL\t", 4U)) {
-		return (omsg_t){OMSG_FIL, .exe = _recv_exe(msg + 4U, msz - 4U)};
+		return (omsg_t){OMSG_FIL, .ins = ins, .inz = eoi - ins,
+				.exe = _recv_exe(eoi + 1U, msz - 1U)};
 	} else if (!memcmp(msg, "KIL\t", 4U)) {
-		return (omsg_t){OMSG_KIL, .oid = _recv_oid(msg + 4U, msz - 4U)};
+		return (omsg_t){OMSG_KIL, .ins = ins, .inz = eoi - ins,
+				.oid = _recv_oid(eoi + 1U, msz - 1U)};
 	} else if (!memcmp(msg, "NOK\t", 4U)) {
-		return (omsg_t){OMSG_NOK, .oid = _recv_oid(msg + 4U, msz - 4U)};
+		return (omsg_t){OMSG_NOK, .ins = ins, .inz = eoi - ins,
+				.oid = _recv_oid(eoi + 1U, msz - 1U)};
 	} else if (!memcmp(msg, "BUY\t", 4U)) {
-		return (omsg_t){OMSG_BUY, .ord = _recv_ord(msg + 0U, msz - 0U)};
+		return (omsg_t){OMSG_BUY, .ins = ins, .inz = eoi - ins,
+				.ord = _recv_ord(msg, eoi + 1U, msz - 1U)};
 	} else if (!memcmp(msg, "SEL\t", 4U)) {
-		return (omsg_t){OMSG_SEL, .ord = _recv_ord(msg + 0U, msz - 0U)};
+		return (omsg_t){OMSG_SEL, .ins = ins, .inz = eoi - ins,
+				.ord = _recv_ord(msg, eoi + 1U, msz - 1U)};
 	} else if (!memcmp(msg, "CAN\t", 4U)) {
-		return (omsg_t){OMSG_CAN, .oid = _recv_oid(msg + 4U, msz - 4U)};
+		return (omsg_t){OMSG_CAN, .ins = ins, .inz = eoi - ins,
+				.oid = _recv_oid(eoi + 1U, msz - 1U)};
 	}
 	/* i shouldn't receive an ORD message */
 	return (omsg_t){OMSG_UNK};
@@ -307,6 +320,8 @@ send_qmsg(char *restrict buf, size_t bsz, qmsg_t msg)
 		goto quo;
 
 	quo:
+		len += (memcpy(buf + len, msg.ins, msg.inz), msg.inz);
+		buf[len++] = '\t';
 		len += pxtostr(buf + len, bsz - len, msg.quo.prc);
 		buf[len++] = '\t';
 		len += qxtostr(buf + len, bsz - len, msg.quo.new);
@@ -319,16 +334,27 @@ qmsg_t
 recv_qmsg(const char *msg, size_t msz)
 {
 	switch (msg[0U]) {
+		const char *ins, *eoi;
+
 	case 'A':
 	case 'B':
 		if (UNLIKELY(msg[2U] != '\t')) {
 			break;
 		}
+		/* snarf instrument */
+		ins = msg + 3U;
+		eoi = memchr(msg + 3U, '\t', msz - 3U);
+		msz -= eoi + 1U - msg;
+		if (UNLIKELY(eoi == NULL)) {
+			break;
+		}
 		switch (msg[1U]) {
 		case '1':
-			return (qmsg_t){QMSG_TOP, .quo = _recv_quo(msg, msz)};
+			return (qmsg_t){QMSG_TOP, ins, eoi - ins,
+					.quo = _recv_quo(msg, eoi + 1U, msz)};
 		case '2':
-			return (qmsg_t){QMSG_LVL, .quo = _recv_quo(msg, msz)};
+			return (qmsg_t){QMSG_LVL, ins, eoi - ins,
+					.quo = _recv_quo(msg, eoi + 1U, msz)};
 		default:
 			break;
 		}
@@ -337,7 +363,15 @@ recv_qmsg(const char *msg, size_t msz)
 		if (memcmp(msg, "TRA\t", 4U)) {
 			break;
 		}
-		return (qmsg_t){QMSG_TRA, .quo = _recv_tra(msg + 4U, msz - 4U)};
+		/* snarf instrument */
+		ins = msg + 4U;
+		eoi = memchr(msg + 4U, '\t', msz - 4U);
+		msz -= eoi - msg;
+		if (UNLIKELY(eoi == NULL)) {
+			break;
+		}
+		return (qmsg_t){QMSG_TRA, ins, eoi - ins,
+				.quo = _recv_tra(eoi + 1U, msz - 1U)};
 	default:
 		break;
 	}

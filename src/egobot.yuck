@@ -1,4 +1,4 @@
-Usage: egobot
+Usage: egobot [INSTR]
 
 Trading bot that randomly sends out orders.
 
