@@ -75,6 +75,16 @@ egobot_LDFLAGS += -mkl
 egobot_LDADD = libdfp.a liblol.a
 BUILT_SOURCES += egobot.yucc
 
+noinst_PROGRAMS += clampbot
+clampbot_SOURCES = clampbot.c clampbot.yuck
+clampbot_CPPFLAGS = $(AM_CPPFLAGS)
+clampbot_CPPFLAGS += $(lol_CFLAGS)
+clampbot_CPPFLAGS += $(clob_CFLAGS)
+clampbot_LDFLAGS = $(AM_LDFLAGS)
+clampbot_LDFLAGS += $(lol_LIBS)
+clampbot_LDADD = libdfp.a liblol.a
+BUILT_SOURCES += clampbot.yucc
+
 
 ## version rules
 version.c: version.c.in $(top_builddir)/.version

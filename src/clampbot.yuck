@@ -1,0 +1,9 @@
+Usage: clampbot INSTR1 INSTR2
+
+Trading bot that clamps two contracts.
+
+  -H, --host=NAME       Connect to NAME.
+  -Q, --quantity=Q      Trade at most Q contracts.
+
+  --dif=X               Difference between INSTR1 and INSTR2
+  --quo=X               Quotient between INSTR1 and INSTR2
