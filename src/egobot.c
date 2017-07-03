@@ -1,6 +1,7 @@
 #if defined HAVE_CONFIG_H
 # include "config.h"
 #endif	/* HAVE_CONFIG_H */
+#include <string.h>
 #if defined HAVE_DFP754_H
 # include <dfp754.h>
 #endif	/* HAVE_DFP754_H */
@@ -17,6 +18,10 @@ static px_t sprd = 0.02dd;
 
 static clob_oid_t coid[NSIDES];
 static quos_msg_t cquo[NSIDES];
+
+static const char *cont;
+static size_t conz;
+#define INS		.ins = cont, .inz = conz
 
 
 static int
@@ -57,6 +62,10 @@ qchan_cb(bot_t UNUSED(b), qmsg_t m)
 {
 	switch (m.typ) {
 	case QMSG_TOP:
+		if (memcmp(m.ins, cont, conz)) {
+			/* not our quote */
+			break;
+		}
 		cquo[m.quo.sid] = m.quo;
 		/* calc mktv as well */
 		mktv = (cquo[SIDE_ASK].prc + cquo[SIDE_BID].prc) / 2.dd;
@@ -86,13 +95,13 @@ hbeat_cb(bot_t b)
 	px_t v = quantizepx(truv(), sprd);
 
 	/* cancel old guys */
-	add_omsg(b, (omsg_t){OMSG_CAN, .oid = coid[SIDE_BID]});
-	add_omsg(b, (omsg_t){OMSG_CAN, .oid = coid[SIDE_ASK]});
-	add_omsg(b, (omsg_t){OMSG_BUY,
+	add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[SIDE_BID]});
+	add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[SIDE_ASK]});
+	add_omsg(b, (omsg_t){OMSG_BUY, INS,
 				 .ord = (clob_ord_t){TYPE_LMT,
 						     .qty = {500.dd, 500.dd},
 						     .lmt = v - sprd / 2.dd}});
-	add_omsg(b, (omsg_t){OMSG_SEL,
+	add_omsg(b, (omsg_t){OMSG_SEL, INS,
 				 .ord = (clob_ord_t){TYPE_LMT,
 						     .qty = {500.dd, 500.dd},
 						     .lmt = v + sprd / 2.dd}});
@@ -115,6 +124,11 @@ main(int argc, char *argv[])
 	if (yuck_parse(argi, argc, argv) < 0) {
 		rc = 1;
 		goto out;
+	}
+
+	if (argi->nargs) {
+		cont = *argi->args;
+		conz = strlen(cont);
 	}
 
 	if (argi->host_arg) {

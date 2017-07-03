@@ -1,4 +1,4 @@
-Usage: hdgbot
+Usage: monkey [INSTR]
 
 Trading bot that randomly sends out orders.
 
