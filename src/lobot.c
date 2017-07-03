@@ -47,6 +47,7 @@ static clob_t clob;
 static int quot_chan = STDOUT_FILENO;
 static int info_chan = STDERR_FILENO;
 
+#define NINSTR		(ninstr ?: 1U)
 static size_t ninstr;
 static char *instr;
 static size_t *instz;
@@ -94,10 +95,13 @@ add_user(int s)
 	if (UNLIKELY(nuser >= zuser)) {
 		zuser = (zuser * 2U) ?: 64U;
 		socks = realloc(socks, zuser * sizeof(*socks));
-		accts = realloc(accts, zuser * sizeof(*accts));
+		accts = realloc(accts, zuser * NINSTR * sizeof(*accts));
 	}
 	socks[nuser] = s;
-	accts[nuser] = (unxs_exa_t){0.dd, 0.dd};
+	accts[nuser * NINSTR] = (unxs_exa_t){0.dd, 0.dd};
+	for (size_t i = 1U; i < ninstr; i++) {
+		accts[nuser * ninstr + i] = (unxs_exa_t){0.dd, 0.dd};
+	}
 	return ++nuser;
 }
 
@@ -111,14 +115,16 @@ user_sock(uid_t u)
 }
 
 static unxs_exa_t
-add_acct(uid_t u, unxs_exa_t a)
+add_acct(uid_t u, size_t i, unxs_exa_t a)
 {
+	const size_t slot = (u - 1) * NINSTR + i;
+
 	if (UNLIKELY(u <= 0)) {
 		return (unxs_exa_t){0.dd, 0.dd};
 	}
-	accts[u - 1].base += a.base;
-	accts[u - 1].term += a.term;
-	return accts[u - 1];
+	accts[slot].base += a.base;
+	accts[slot].term += a.term;
+	return accts[slot];
 }
 
 static int
@@ -152,9 +158,12 @@ kill_user(uid_t u)
 			(void)send((fd), __buf__, __len__, 0);		\
 		}							\
 	} while (0)
+
+#define INS(j)								\
+	.ins = instr + instz[(j)], .inz = instz[(j) + 1U] - instz[(j) + 0U]
 			
 static void
-prnt_lvl2(int s)
+prnt_lvl2(int s, size_t ins)
 {
 	char buf[4096U];
 	size_t len = 0U;
@@ -162,6 +171,10 @@ prnt_lvl2(int s)
 	/* market orders first */
 	qx_t mb = plqu_sum(clob.mkt[SIDE_BID]);
 	qx_t ma = plqu_sum(clob.mkt[SIDE_ASK]);
+
+	const size_t thisz = instz[ins + 1U] - instz[ins + 0U];
+	len += (memcpy(buf, instr + instz[ins], thisz), thisz);
+	buf[len++] = '\t';
 
 	len += (memcpy(buf + len, "MKT\t", 4U), 4U);
 	len += (memcpy(buf + len, "MKT\t", 4U), 4U);
@@ -182,8 +195,13 @@ prnt_lvl2(int s)
 
 		if (UNLIKELY(!bp && !ap)) {
 			break;
+		} else if (UNLIKELY(len + 256U > sizeof(buf))) {
+			/* intermediate flush */
+			write(s, buf, len);
+			len = 0U;
 		}
 
+		buf[len++] = '\t';
 		if (bp) {
 			len += pxtostr(buf + len, sizeof(buf) - len, bi.k);
 		}
@@ -218,15 +236,20 @@ prnt_lvl2(int s)
 }
 
 static void
-prnt_acct(int s)
+prnt_acct(int s, size_t ins)
 {
 	char buf[4096U];
 	size_t len = 0U;
 
-	for (size_t i = 1U; i <= nuser; i++) {
-		len += qxtostr(buf + len, sizeof(buf) - len, accts[i - 1].base);
+	const size_t thisz = instz[ins + 1U] - instz[ins + 0U];
+	len += (memcpy(buf, instr + instz[ins], thisz), thisz);
+	buf[len++] = '\t';
+	for (size_t i = 0U; i < nuser; i++) {
+		len += qxtostr(buf + len, sizeof(buf) - len,
+			       accts[i * NINSTR + ins].base);
 		buf[len++] = '/';
-		len += qxtostr(buf + len, sizeof(buf) - len, accts[i - 1].term);
+		len += qxtostr(buf + len, sizeof(buf) - len,
+			       accts[i * NINSTR + ins].term);
 		buf[len++] = ' ';
 	}
 	buf[len++] = '\n';
@@ -256,14 +279,16 @@ static void
 chck_acct(void)
 {
 /* account invariant is that sum of base must be 0, and sum of terms must be 0 */
-	unxs_exa_t s = {0.dd, 0.dd};
+	for (size_t j = 0U; j < NINSTR; j++) {
+		unxs_exa_t s = {0.dd, 0.dd};
 
-	for (size_t i = 0U; i < nuser; i++) {
-		s.base += accts[i].base;
-		s.term += accts[i].term;
+		for (size_t i = 0U; i < nuser; i++) {
+			s.base += accts[i * NINSTR + j].base;
+			s.term += accts[i * NINSTR + j].term;
+		}
+		assert(s.base == 0.dd);
+		assert(s.term == 0.dd);
 	}
-	assert(s.base == 0.dd);
-	assert(s.term == 0.dd);
 	return;
 }
 
@@ -298,6 +323,75 @@ omsg_del_oid(int fd, clob_oid_t o)
 	int rc = clob_del(clob, o);
 
 	SEND_OMSG(fd, .typ = !(rc < 0) ? OMSG_KIL : OMSG_NOK, .oid = o);
+	return;
+}
+
+static void
+diss_exe(unxs_t exe, size_t ins)
+{
+	char buf[256U];
+	ssize_t len;
+
+	for (size_t i = 0U; i < exe->n; i++) {
+		/* let the maker know before anyone else
+		 * well, the taker has already been informed */
+		const uid_t u = exe->o[MODE_BI * i + SIDE_MAKER].user;
+		const uid_t cu = exe->o[MODE_BI * i + SIDE_TAKER].user;
+		const clob_side_t s = (clob_side_t)exe->s[i];
+		const clob_side_t cs = clob_contra_side(s);
+		unxs_exa_t acc = add_acct(u, ins, unxs_exa(exe->x[i], s));
+		unxs_exa_t cacc = add_acct(cu, ins, unxs_exa(exe->x[i], cs));
+
+		len = 0U;
+		len += send_omsg(buf + len, sizeof(buf) - len,
+				 (omsg_t){OMSG_FIL, INS(ins), .exe = exe->x[i]});
+		len += send_omsg(buf + len, sizeof(buf) - len,
+				 (omsg_t){OMSG_ACC, INS(ins), .exa = acc});
+		if (LIKELY(len > 0)) {
+			send(user_sock(u), buf, len, 0);
+		}
+
+		len = 0U;
+		len += send_omsg(buf + len, sizeof(buf) - len,
+				 (omsg_t){OMSG_FIL, INS(ins), .exe = exe->x[i]});
+		len += send_omsg(buf + len, sizeof(buf) - len,
+				 (omsg_t){OMSG_ACC, INS(ins), .exa = cacc});
+		if (LIKELY(len > 0)) {
+			send(user_sock(cu), buf, len, 0);
+		}
+	}
+	for (size_t i = 0U; i < exe->n; i++) {
+		SEND_QMSG(quot_chan, QMSG_TRA, INS(ins),
+			  .quo = {NSIDES, exe->x[i].prc, exe->x[i].qty});
+	}
+	unxs_clr(exe);
+	return;
+}
+
+static void
+diss_quo(quos_t q, size_t ins)
+{
+	for (size_t i = 0U; i < q->n; i++) {
+		SEND_QMSG(quot_chan, QMSG_LVL, INS(ins), .quo = q->m[i]);
+	}
+	if (q->n) {
+		btree_key_t k;
+		btree_val_t *v;
+
+		v = btree_top(clob.lmt[SIDE_ASK], &k);
+		if (LIKELY(v != NULL)) {
+			quos_msg_t t = {SIDE_ASK, k, v->sum.dis};
+			SEND_QMSG(quot_chan, QMSG_TOP, INS(ins), .quo = t);
+		}
+
+		v = btree_top(clob.lmt[SIDE_BID], &k);
+		if (LIKELY(v != NULL)) {
+			quos_msg_t t = {SIDE_BID, k, v->sum.dis};
+			SEND_QMSG(quot_chan, QMSG_TOP, INS(ins), .quo = t);
+		}
+	}
+	/* clear them quotes */
+	quos_clr(q);
 	return;
 }
 
@@ -385,66 +479,11 @@ beef_cb(EV_P_ ev_io *w, int UNUSED(re))
 static void
 prep_cb(EV_P_ ev_prepare *UNUSED(p), int UNUSED(re))
 {
-	with (unxs_t x = clob.exe) {
-		char buf[256U];
-		ssize_t len;
-
-		for (size_t i = 0U; i < x->n; i++) {
-			/* let the maker know before anyone else
-			 * well, the taker has already been informed */
-			const uid_t u = x->o[MODE_BI * i + SIDE_MAKER].user;
-			const uid_t cu = x->o[MODE_BI * i + SIDE_TAKER].user;
-			const clob_side_t s = (clob_side_t)x->s[i];
-			const clob_side_t cs = clob_contra_side(s);
-			unxs_exa_t acc = add_acct(u, unxs_exa(x->x[i], s));
-			unxs_exa_t cacc = add_acct(cu, unxs_exa(x->x[i], cs));
-
-			len = 0U;
-			len += send_omsg(buf + len, sizeof(buf) - len,
-					(omsg_t){OMSG_FIL, .exe = x->x[i]});
-			len += send_omsg(buf + len, sizeof(buf) - len,
-					 (omsg_t){OMSG_ACC, .exa = acc});
-			if (LIKELY(len > 0)) {
-				send(user_sock(u), buf, len, 0);
-			}
-
-			len = 0U;
-			len += send_omsg(buf + len, sizeof(buf) - len,
-					(omsg_t){OMSG_FIL, .exe = x->x[i]});
-			len += send_omsg(buf + len, sizeof(buf) - len,
-					 (omsg_t){OMSG_ACC, .exa = cacc});
-			if (LIKELY(len > 0)) {
-				send(user_sock(cu), buf, len, 0);
-			}
-		}
-		for (size_t i = 0U; i < x->n; i++) {
-			SEND_QMSG(quot_chan, QMSG_TRA,
-				  .quo = {NSIDES, x->x[i].prc, x->x[i].qty});
-		}
-		unxs_clr(x);
+	for (size_t i = 0U; i < NINSTR; i++) {
+		diss_exe(clob.exe, i);
 	}
-	with (quos_t q = clob.quo) {
-		for (size_t i = 0U; i < q->n; i++) {
-			SEND_QMSG(quot_chan, QMSG_LVL, .quo = q->m[i]);
-		}
-		if (q->n) {
-			btree_key_t k;
-			btree_val_t *v;
-
-			v = btree_top(clob.lmt[SIDE_ASK], &k);
-			if (LIKELY(v != NULL)) {
-				quos_msg_t t = {SIDE_ASK, k, v->sum.dis};
-				SEND_QMSG(quot_chan, QMSG_TOP, .quo = t);
-			}
-
-			v = btree_top(clob.lmt[SIDE_BID], &k);
-			if (LIKELY(v != NULL)) {
-				quos_msg_t t = {SIDE_BID, k, v->sum.dis};
-				SEND_QMSG(quot_chan, QMSG_TOP, .quo = t);
-			}
-		}
-		/* clear them quotes */
-		quos_clr(q);
+	for (size_t i = 0U; i < NINSTR; i++) {
+		diss_quo(clob.quo, i);
 	}
 	return;
 }
@@ -456,8 +495,10 @@ hbeat_cb(EV_P_ ev_timer *UNUSED(w), int UNUSED(revents))
 		return;
 	}
 	/* otherwise print the book */
-	prnt_lvl2(info_chan);
-	prnt_acct(info_chan);
+	for (size_t i = 0U; i < NINSTR; i++) {
+		prnt_lvl2(info_chan, i);
+		prnt_acct(info_chan, i);
+	}
 
 	/* check book */
 	chck_book();
@@ -523,7 +564,12 @@ Error: cannot run in daemon mode");
 			insth[i] = hash(argi->args[i], z);
 			insoff += z + 1U;
 		}
-		insth[argi->nargs] = insoff;
+		instz[argi->nargs] = insoff;
+	} else {
+		static char dummy[] = "";
+		static size_t dummz[] = {0U, 0U};
+		instr = dummy;
+		instz = dummz;
 	}
 
 	/* no more parameters */
