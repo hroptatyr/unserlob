@@ -171,12 +171,8 @@ prnt_lvl2(int s)
 	while (len < sizeof(buf)) {
 		bool bp, ap;
 
-		do {
-			bp = btree_iter_next(&bi);
-		} while (bp && bi.v->sum.dis + bi.v->sum.hid <= 0.dd);
-		do {
-			ap = btree_iter_next(&ai);
-		} while (ap && ai.v->sum.dis + ai.v->sum.hid <= 0.dd);
+		bp = btree_iter_next(&bi);
+		ap = btree_iter_next(&ai);
 
 		if (UNLIKELY(!bp && !ap)) {
 			break;
