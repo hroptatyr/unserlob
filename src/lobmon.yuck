@@ -1,0 +1,5 @@
+Usage: slobmon
+
+Show slob MM experiment
+
+  -i, --info            Only display the information channel.

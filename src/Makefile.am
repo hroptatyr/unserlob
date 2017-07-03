@@ -39,6 +39,15 @@ lol_CFLAGS = $(clob_CFLAGS) $(dfp754_CFLAGS)
 lol_LIBS = $(dfp754_LIBS) $(ev_LIBS) libdfp.a
 
 
+bin_PROGRAMS += lobmon
+lobmon_SOURCES = lobmon.c lobmon.yuck
+lobmon_SOURCES += sock.c sock.h
+lobmon_CPPFLAGS = $(AM_CPPFLAGS)
+lobmon_CPPFLAGS += $(ev_CFLAGS)
+lobmon_LDFLAGS = $(AM_LDFLAGS)
+lobmon_LDFLAGS += $(ev_LIBS)
+BUILT_SOURCES += lobmon.yucc
+
 noinst_PROGRAMS += lobot
 lobot_SOURCES = lobot.c lobot.yuck
 lobot_SOURCES += sock.c sock.h
