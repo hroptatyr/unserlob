@@ -425,7 +425,7 @@ prep_cb(EV_P_ ev_prepare *UNUSED(p), int UNUSED(re))
 	}
 	with (quos_t q = clob.quo) {
 		for (size_t i = 0U; i < q->n; i++) {
-			SEND_QMSG(quot_chan, QMSG_LVL, q->m[i]);
+			SEND_QMSG(quot_chan, QMSG_LVL, .quo = q->m[i]);
 		}
 		if (q->n) {
 			btree_key_t k;
@@ -434,13 +434,13 @@ prep_cb(EV_P_ ev_prepare *UNUSED(p), int UNUSED(re))
 			v = btree_top(clob.lmt[SIDE_ASK], &k);
 			if (LIKELY(v != NULL)) {
 				quos_msg_t t = {SIDE_ASK, k, v->sum.dis};
-				SEND_QMSG(quot_chan, QMSG_TOP, t);
+				SEND_QMSG(quot_chan, QMSG_TOP, .quo = t);
 			}
 
 			v = btree_top(clob.lmt[SIDE_BID], &k);
 			if (LIKELY(v != NULL)) {
 				quos_msg_t t = {SIDE_BID, k, v->sum.dis};
-				SEND_QMSG(quot_chan, QMSG_TOP, t);
+				SEND_QMSG(quot_chan, QMSG_TOP, .quo = t);
 			}
 		}
 		/* clear them quotes */

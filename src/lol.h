@@ -22,6 +22,8 @@ typedef struct {
 		OMSG_CAN,
 		OMSG_ORD,
 	} typ;
+	const char *ins;
+	const size_t inz;
 	union {
 		clob_ord_t ord;
 		clob_oid_t oid;
@@ -37,6 +39,8 @@ typedef struct {
 		QMSG_LVL,
 		QMSG_TRA,
 	} typ;
+	const char *ins;
+	const size_t inz;
 	union {
 		quos_msg_t quo;
 	};
