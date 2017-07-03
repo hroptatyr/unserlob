@@ -72,6 +72,13 @@ serror(const char *fmt, ...)
 
 /* callbacks */
 static void
+_sig_cb(EV_P_ ev_signal *UNUSED(w), int UNUSED(re))
+{
+	ev_unloop(EV_A_ EVUNLOOP_ALL);
+	return;
+}
+
+static void
 _tim_cb(EV_P_ ev_timer *UNUSED(w), int UNUSED(re))
 {
 	bot_t b = w->data;
@@ -93,7 +100,8 @@ _och_cb(EV_P_ ev_io *w, int UNUSED(re))
 
 	nrd = recv(w->fd, buf + r->obof, OBOFZ - r->obof, 0);
 	if (UNLIKELY(nrd <= 0)) {
-		return;
+		/* exchange hung up? */
+		_sig_cb(EV_A_ NULL, 0);
 	} else if (r->parent.ochan_cb == NULL) {
 		goto reset;
 	}
@@ -151,13 +159,6 @@ _qch_cb(EV_P_ ev_io *w, int UNUSED(re))
 	reset:
 		r->qbof = 0U;
 	}
-	return;
-}
-
-static void
-_sig_cb(EV_P_ ev_signal *UNUSED(w), int UNUSED(re))
-{
-	ev_unloop(EV_A_ EVUNLOOP_ALL);
 	return;
 }
 
