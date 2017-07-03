@@ -267,34 +267,34 @@ recv_omsg(const char *msg, size_t msz)
 	const char *ins, *eoi;
 
 	eoi = memchr(ins = msg + 4U, '\t', msz - 4U);
-	msz -= (eoi + 1U - msg);
+	msz -= eoi - msg;
 
-	if (UNLIKELY(eoi++ == NULL)) {
+	if (UNLIKELY(eoi == NULL)) {
 		;
 	} else if (!memcmp(msg, "OID\t", 4U)) {
 		return (omsg_t){OMSG_OID, .ins = ins, .inz = eoi - ins,
-				.oid = _recv_oid(eoi, msz)};
+				.oid = _recv_oid(eoi + 1U, msz - 1U)};
 	} else if (!memcmp(msg, "ACC\t", 4U)) {
 		return (omsg_t){OMSG_ACC, .ins = ins, .inz = eoi - ins,
-				.exa = _recv_exa(eoi, msz)};
+				.exa = _recv_exa(eoi + 1U, msz - 1U)};
 	} else if (!memcmp(msg, "FIL\t", 4U)) {
 		return (omsg_t){OMSG_FIL, .ins = ins, .inz = eoi - ins,
-				.exe = _recv_exe(eoi, msz)};
+				.exe = _recv_exe(eoi + 1U, msz - 1U)};
 	} else if (!memcmp(msg, "KIL\t", 4U)) {
 		return (omsg_t){OMSG_KIL, .ins = ins, .inz = eoi - ins,
-				.oid = _recv_oid(eoi, msz)};
+				.oid = _recv_oid(eoi + 1U, msz - 1U)};
 	} else if (!memcmp(msg, "NOK\t", 4U)) {
 		return (omsg_t){OMSG_NOK, .ins = ins, .inz = eoi - ins,
-				.oid = _recv_oid(eoi, msz)};
+				.oid = _recv_oid(eoi + 1U, msz - 1U)};
 	} else if (!memcmp(msg, "BUY\t", 4U)) {
 		return (omsg_t){OMSG_BUY, .ins = ins, .inz = eoi - ins,
-				.ord = _recv_ord(msg, eoi, msz)};
+				.ord = _recv_ord(msg, eoi + 1U, msz - 1U)};
 	} else if (!memcmp(msg, "SEL\t", 4U)) {
 		return (omsg_t){OMSG_SEL, .ins = ins, .inz = eoi - ins,
-				.ord = _recv_ord(msg, eoi, msz)};
+				.ord = _recv_ord(msg, eoi + 1U, msz - 1U)};
 	} else if (!memcmp(msg, "CAN\t", 4U)) {
 		return (omsg_t){OMSG_CAN, .ins = ins, .inz = eoi - ins,
-				.oid = _recv_oid(eoi, msz)};
+				.oid = _recv_oid(eoi + 1U, msz - 1U)};
 	}
 	/* i shouldn't receive an ORD message */
 	return (omsg_t){OMSG_UNK};
@@ -345,16 +345,16 @@ recv_qmsg(const char *msg, size_t msz)
 		ins = msg + 3U;
 		eoi = memchr(msg + 3U, '\t', msz - 3U);
 		msz -= eoi + 1U - msg;
-		if (UNLIKELY(eoi++ == NULL)) {
+		if (UNLIKELY(eoi == NULL)) {
 			break;
 		}
 		switch (msg[1U]) {
 		case '1':
 			return (qmsg_t){QMSG_TOP, ins, eoi - ins,
-					.quo = _recv_quo(msg, eoi, msz)};
+					.quo = _recv_quo(msg, eoi + 1U, msz)};
 		case '2':
 			return (qmsg_t){QMSG_LVL, ins, eoi - ins,
-					.quo = _recv_quo(msg, eoi, msz)};
+					.quo = _recv_quo(msg, eoi + 1U, msz)};
 		default:
 			break;
 		}
@@ -366,12 +366,12 @@ recv_qmsg(const char *msg, size_t msz)
 		/* snarf instrument */
 		ins = msg + 4U;
 		eoi = memchr(msg + 4U, '\t', msz - 4U);
-		msz -= eoi + 1U - msg;
-		if (UNLIKELY(eoi++ == NULL)) {
+		msz -= eoi - msg;
+		if (UNLIKELY(eoi == NULL)) {
 			break;
 		}
 		return (qmsg_t){QMSG_TRA, ins, eoi - ins,
-				.quo = _recv_tra(eoi, msz)};
+				.quo = _recv_tra(eoi + 1U, msz - 1U)};
 	default:
 		break;
 	}
