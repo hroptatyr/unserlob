@@ -42,7 +42,7 @@
 #define EV_P  struct ev_loop *loop __attribute__((unused))
 
 /* global limit order book */
-static clob_t glob;
+static clob_t clob;
 static int quot_chan = STDOUT_FILENO;
 static int info_chan = STDERR_FILENO;
 
@@ -154,8 +154,8 @@ prnt_lvl2(int s)
 	size_t len = 0U;
 
 	/* market orders first */
-	qx_t mb = plqu_sum(glob.mkt[SIDE_BID]);
-	qx_t ma = plqu_sum(glob.mkt[SIDE_ASK]);
+	qx_t mb = plqu_sum(clob.mkt[SIDE_BID]);
+	qx_t ma = plqu_sum(clob.mkt[SIDE_ASK]);
 
 	len += (memcpy(buf + len, "MKT\t", 4U), 4U);
 	len += (memcpy(buf + len, "MKT\t", 4U), 4U);
@@ -165,8 +165,8 @@ prnt_lvl2(int s)
 	buf[len++] = '\n';
 
 	/* now for limits */
-	btree_iter_t bi = {glob.lmt[SIDE_BID]};
-	btree_iter_t ai = {glob.lmt[SIDE_ASK]};
+	btree_iter_t bi = {clob.lmt[SIDE_BID]};
+	btree_iter_t ai = {clob.lmt[SIDE_ASK]};
 
 	while (len < sizeof(buf)) {
 		bool bp, ap;
@@ -228,6 +228,40 @@ prnt_acct(int s)
 	return;
 }
 
+#include <assert.h>
+static void
+chck_book(void)
+{
+	qx_t mb = plqu_sum(clob.mkt[SIDE_BID]);
+	qx_t ma = plqu_sum(clob.mkt[SIDE_ASK]);
+
+	if (mb > 0.dd) {
+		btree_iter_t ai = {clob.lmt[SIDE_ASK]};
+		assert(!btree_iter_next(&ai));
+	}
+	if (ma > 0.dd) {
+		btree_iter_t bi = {clob.lmt[SIDE_BID]};
+		assert(!btree_iter_next(&bi));
+	}
+	return;
+}
+
+static void
+chck_acct(void)
+{
+/* account invariant is that sum of base must be 0, and sum of terms must be 0 */
+	unxs_exa_t s = {0.dd, 0.dd};
+
+	for (size_t i = 0U; i < nuser; i++) {
+		s.base += accts[i].base;
+		s.term += accts[i].term;
+	}
+	assert(s.base == 0.dd);
+	assert(s.term == 0.dd);
+	return;
+}
+
+
 static void
 omsg_add_ord(int fd, clob_ord_t o, const uid_t u)
 {
@@ -244,7 +278,7 @@ omsg_add_ord(int fd, clob_ord_t o, const uid_t u)
 	/* stick uid into orderbook */
 	o.user = u;
 	/* continuous trading */
-	oi = unxs_order(glob, o, NANPX);
+	oi = unxs_order(clob, o, NANPX);
 	/* let him know about the residual order */
 	if (oi.qid) {
 		SEND_OMSG(fd, OMSG_OID, .oid = oi);
@@ -255,7 +289,7 @@ omsg_add_ord(int fd, clob_ord_t o, const uid_t u)
 static void
 omsg_del_oid(int fd, clob_oid_t o)
 {
-	int rc = clob_del(glob, o);
+	int rc = clob_del(clob, o);
 
 	SEND_OMSG(fd, .typ = !(rc < 0) ? OMSG_KIL : OMSG_NOK, .oid = o);
 	return;
@@ -345,7 +379,7 @@ beef_cb(EV_P_ ev_io *w, int UNUSED(re))
 static void
 prep_cb(EV_P_ ev_prepare *UNUSED(p), int UNUSED(re))
 {
-	with (unxs_t x = glob.exe) {
+	with (unxs_t x = clob.exe) {
 		char buf[256U];
 		ssize_t len;
 
@@ -383,7 +417,7 @@ prep_cb(EV_P_ ev_prepare *UNUSED(p), int UNUSED(re))
 		}
 		unxs_clr(x);
 	}
-	with (quos_t q = glob.quo) {
+	with (quos_t q = clob.quo) {
 		for (size_t i = 0U; i < q->n; i++) {
 			SEND_QMSG(quot_chan, QMSG_LVL, q->m[i]);
 		}
@@ -391,13 +425,13 @@ prep_cb(EV_P_ ev_prepare *UNUSED(p), int UNUSED(re))
 			btree_key_t k;
 			btree_val_t *v;
 
-			v = btree_top(glob.lmt[SIDE_ASK], &k);
+			v = btree_top(clob.lmt[SIDE_ASK], &k);
 			if (LIKELY(v != NULL)) {
 				quos_msg_t t = {SIDE_ASK, k, v->sum.dis};
 				SEND_QMSG(quot_chan, QMSG_TOP, t);
 			}
 
-			v = btree_top(glob.lmt[SIDE_BID], &k);
+			v = btree_top(clob.lmt[SIDE_BID], &k);
 			if (LIKELY(v != NULL)) {
 				quos_msg_t t = {SIDE_BID, k, v->sum.dis};
 				SEND_QMSG(quot_chan, QMSG_TOP, t);
@@ -418,6 +452,18 @@ hbeat_cb(EV_P_ ev_timer *UNUSED(w), int UNUSED(revents))
 	/* otherwise print the book */
 	prnt_lvl2(info_chan);
 	prnt_acct(info_chan);
+
+	/* check book */
+	chck_book();
+	/* check accounts */
+	chck_acct();
+	return;
+}
+
+static void
+sig_cb(EV_P_ ev_signal *UNUSED(w), int UNUSED(revents))
+{
+	ev_unloop(EV_A_ EVUNLOOP_ALL);
 	return;
 }
 
@@ -431,6 +477,8 @@ main(int argc, char *argv[])
 	ev_io beef[1U];
 	ev_prepare prep[1U];
 	ev_timer hbeat[1U];
+	ev_signal trm[1U];
+	ev_signal itr[1U];
 	/* use the default event loop unless you have special needs */
 	struct ev_loop *loop;
 	int rc = 0;
@@ -486,9 +534,14 @@ Error: cannot open socket");
 	ev_prepare_start(EV_A_ prep);
 
 	/* get going then */
-	glob = make_clob();
-	glob.exe = make_unxs(MODE_BI);
-	glob.quo = make_quos();
+	clob = make_clob();
+	clob.exe = make_unxs(MODE_BI);
+	clob.quo = make_quos();
+
+	ev_signal_init(trm, sig_cb, SIGTERM);
+	ev_signal_start(EV_A_ trm);
+	ev_signal_init(itr, sig_cb, SIGINT);
+	ev_signal_start(EV_A_ itr);
 
 	/* now wait for events to arrive */
 	ev_loop(EV_A_ 0);
@@ -500,9 +553,9 @@ Error: cannot open socket");
 		close(s);
 	}
 
-	free_quos(glob.quo);
-	free_unxs(glob.exe);
-	free_clob(glob);
+	free_quos(clob.quo);
+	free_unxs(clob.exe);
+	free_clob(clob);
 
 nop:
 	/* destroy the default evloop */

@@ -20,6 +20,7 @@ typedef struct {
 		OMSG_BUY,
 		OMSG_SEL,
 		OMSG_CAN,
+		OMSG_ORD,
 	} typ;
 	union {
 		clob_ord_t ord;

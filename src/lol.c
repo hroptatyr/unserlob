@@ -234,6 +234,9 @@ send_omsg(char *restrict buf, size_t bsz, omsg_t msg)
 	case OMSG_CAN:
 		memcpy(buf, "CAN\t", 4U);
 		return 4U + _send_oid(buf + 4U, bsz - 4U, msg.oid);
+	case OMSG_ORD:
+		memcpy(buf, (const char*[]){"SEL\t","BUY\t"}[msg.ord.sid], 4U);
+		return 4U + _send_ord(buf + 4U, bsz - 4U, msg.ord);
 
 	case OMSG_ACC:
 		memcpy(buf, "ACC\t", 4U);
@@ -280,6 +283,7 @@ recv_omsg(const char *msg, size_t msz)
 	} else if (!memcmp(msg, "CAN\t", 4U)) {
 		return (omsg_t){OMSG_CAN, .oid = _recv_oid(msg + 4U, msz - 4U)};
 	}
+	/* i shouldn't receive an ORD message */
 	return (omsg_t){OMSG_UNK};
 }
 

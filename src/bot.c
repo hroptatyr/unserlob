@@ -28,6 +28,9 @@ struct _bot_s {
 	ev_io och[1U];
 	ev_io qch[1U];
 	ev_timer tim[1U];
+	ev_signal pip[1U];
+	ev_signal itr[1U];
+	ev_signal trm[1U];
 
 	/* message buffer, qchan buffer, ochan buffer offsets */
 	size_t mbof;
@@ -151,6 +154,13 @@ _qch_cb(EV_P_ ev_io *w, int UNUSED(re))
 	return;
 }
 
+static void
+_sig_cb(EV_P_ ev_signal *UNUSED(w), int UNUSED(re))
+{
+	ev_unloop(EV_A_ EVUNLOOP_ALL);
+	return;
+}
+
 
 static struct ev_loop *loop;
 static struct ipv6_mreq mreq;
@@ -180,6 +190,13 @@ Error: cannot open socket for execution messages");
 	ev_io_init(r->och, _och_cb, s, EV_READ);
 	ev_io_start(EV_A_ r->och);
 	r->och->data = r;
+
+	ev_signal_init(r->pip, _sig_cb, SIGPIPE);
+	ev_signal_start(EV_A_ r->pip);
+	ev_signal_init(r->itr, _sig_cb, SIGINT);
+	ev_signal_start(EV_A_ r->itr);
+	ev_signal_init(r->trm, _sig_cb, SIGTERM);
+	ev_signal_start(EV_A_ r->trm);
 	return (void*)r;
 
 nil:
