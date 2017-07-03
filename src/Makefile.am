@@ -42,6 +42,7 @@ lol_LIBS = $(dfp754_LIBS) $(ev_LIBS) libdfp.a
 noinst_PROGRAMS += lobot
 lobot_SOURCES = lobot.c lobot.yuck
 lobot_SOURCES += sock.c sock.h
+lobot_SOURCES += hash.c hash.h
 lobot_CPPFLAGS = $(AM_CPPFLAGS)
 lobot_CPPFLAGS += $(ev_CFLAGS)
 lobot_CPPFLAGS += $(clob_CFLAGS)

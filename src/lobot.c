@@ -25,6 +25,7 @@
 #include "clob/btree.h"
 #include "sock.h"
 #include "lol.h"
+#include "hash.h"
 #include "nifty.h"
 
 #define strtoqx		strtod64
@@ -45,6 +46,11 @@
 static clob_t clob;
 static int quot_chan = STDOUT_FILENO;
 static int info_chan = STDERR_FILENO;
+
+static size_t ninstr;
+static char *instr;
+static size_t *instz;
+static hx_t *insth;
 
 
 static __attribute__((format(printf, 1, 2))) void
@@ -498,6 +504,31 @@ Error: cannot run in daemon mode");
 		info_chan = -1;
 	}
 
+	if ((ninstr = argi->nargs)) {
+		size_t zinstr = 64U;
+		size_t insoff = 0U;
+
+		instr = malloc(zinstr * sizeof(*instr));
+		instz = malloc((ninstr + 1U) * sizeof(*instz));
+		insth = malloc(ninstr * sizeof(*insth));
+
+		for (size_t i = 0U; i < argi->nargs; i++) {
+			const size_t z = strlen(argi->args[i]);
+			if (UNLIKELY(insoff + z >= zinstr)) {
+				zinstr *= 2U;
+				instr = realloc(instr, zinstr * sizeof(*instr));
+			}
+			memcpy(instr + insoff, argi->args[i], z + 1U);
+			instz[i] = insoff;
+			insth[i] = hash(argi->args[i], z);
+			insoff += z + 1U;
+		}
+		insth[argi->nargs] = insoff;
+	}
+
+	/* no more parameters */
+	yuck_free(argi);
+
 	/* make quote channel multicast */
 	if (UNLIKELY((quot_chan = mc6_socket()) < 0)) {
 		serror("\
@@ -557,11 +588,16 @@ Error: cannot open socket");
 	free_unxs(clob.exe);
 	free_clob(clob);
 
+	if (ninstr) {
+		free(instr);
+		free(instz);
+		free(insth);
+	}
+
 nop:
 	/* destroy the default evloop */
 	ev_default_destroy();
 
 out:
-	yuck_free(argi);
 	return rc;
 }
