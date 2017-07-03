@@ -43,7 +43,7 @@
 #define EV_P  struct ev_loop *loop __attribute__((unused))
 
 /* global limit order book */
-static clob_t clob;
+static clob_t *clob;
 static int quot_chan = STDOUT_FILENO;
 static int info_chan = STDERR_FILENO;
 
@@ -169,8 +169,8 @@ prnt_lvl2(int s, size_t ins)
 	size_t len = 0U;
 
 	/* market orders first */
-	qx_t mb = plqu_sum(clob.mkt[SIDE_BID]);
-	qx_t ma = plqu_sum(clob.mkt[SIDE_ASK]);
+	qx_t mb = plqu_sum(clob[ins].mkt[SIDE_BID]);
+	qx_t ma = plqu_sum(clob[ins].mkt[SIDE_ASK]);
 
 	const size_t thisz = instz[ins + 1U] - instz[ins + 0U];
 	len += (memcpy(buf, instr + instz[ins], thisz), thisz);
@@ -184,8 +184,8 @@ prnt_lvl2(int s, size_t ins)
 	buf[len++] = '\n';
 
 	/* now for limits */
-	btree_iter_t bi = {clob.lmt[SIDE_BID]};
-	btree_iter_t ai = {clob.lmt[SIDE_ASK]};
+	btree_iter_t bi = {clob[ins].lmt[SIDE_BID]};
+	btree_iter_t ai = {clob[ins].lmt[SIDE_ASK]};
 
 	while (len < sizeof(buf)) {
 		bool bp, ap;
@@ -261,16 +261,18 @@ prnt_acct(int s, size_t ins)
 static void
 chck_book(void)
 {
-	qx_t mb = plqu_sum(clob.mkt[SIDE_BID]);
-	qx_t ma = plqu_sum(clob.mkt[SIDE_ASK]);
+	for (size_t j = 0U; j < NINSTR; j++) {
+		qx_t mb = plqu_sum(clob[j].mkt[SIDE_BID]);
+		qx_t ma = plqu_sum(clob[j].mkt[SIDE_ASK]);
 
-	if (mb > 0.dd) {
-		btree_iter_t ai = {clob.lmt[SIDE_ASK]};
-		assert(!btree_iter_next(&ai));
-	}
-	if (ma > 0.dd) {
-		btree_iter_t bi = {clob.lmt[SIDE_BID]};
-		assert(!btree_iter_next(&bi));
+		if (mb > 0.dd) {
+			btree_iter_t ai = {clob[j].lmt[SIDE_ASK]};
+			assert(!btree_iter_next(&ai));
+		}
+		if (ma > 0.dd) {
+			btree_iter_t bi = {clob[j].lmt[SIDE_BID]};
+			assert(!btree_iter_next(&bi));
+		}
 	}
 	return;
 }
@@ -294,7 +296,7 @@ chck_acct(void)
 
 
 static void
-omsg_add_ord(int fd, clob_ord_t o, const uid_t u)
+omsg_add_ord(int fd, size_t i, clob_ord_t o, const uid_t u)
 {
 	clob_oid_t oi;
 
@@ -309,20 +311,20 @@ omsg_add_ord(int fd, clob_ord_t o, const uid_t u)
 	/* stick uid into orderbook */
 	o.user = u;
 	/* continuous trading */
-	oi = unxs_order(clob, o, NANPX);
+	oi = unxs_order(clob[i], o, NANPX);
 	/* let him know about the residual order */
 	if (oi.qid) {
-		SEND_OMSG(fd, OMSG_OID, .oid = oi);
+		SEND_OMSG(fd, OMSG_OID, INS(i), .oid = oi);
 	}
 	return;
 }
 
 static void
-omsg_del_oid(int fd, clob_oid_t o)
+omsg_del_oid(int fd, size_t i, clob_oid_t o)
 {
-	int rc = clob_del(clob, o);
+	int rc = clob_del(clob[i], o);
 
-	SEND_OMSG(fd, .typ = !(rc < 0) ? OMSG_KIL : OMSG_NOK, .oid = o);
+	SEND_OMSG(fd, .typ = !(rc < 0) ? OMSG_KIL : OMSG_NOK, INS(i), .oid = o);
 	return;
 }
 
@@ -378,13 +380,13 @@ diss_quo(quos_t q, size_t ins)
 		btree_key_t k;
 		btree_val_t *v;
 
-		v = btree_top(clob.lmt[SIDE_ASK], &k);
+		v = btree_top(clob[ins].lmt[SIDE_ASK], &k);
 		if (LIKELY(v != NULL)) {
 			quos_msg_t t = {SIDE_ASK, k, v->sum.dis};
 			SEND_QMSG(quot_chan, QMSG_TOP, INS(ins), .quo = t);
 		}
 
-		v = btree_top(clob.lmt[SIDE_BID], &k);
+		v = btree_top(clob[ins].lmt[SIDE_BID], &k);
 		if (LIKELY(v != NULL)) {
 			quos_msg_t t = {SIDE_BID, k, v->sum.dis};
 			SEND_QMSG(quot_chan, QMSG_TOP, INS(ins), .quo = t);
@@ -406,6 +408,26 @@ struct uclo_s {
 	char buf[];
 };
 
+static size_t
+hins(const char *ins, size_t inz)
+{
+	hx_t h;
+	size_t j;
+
+	if (inz == 0U) {
+		return 0U;
+	}
+	/* otherwise hash the guy */
+	h = hash(ins, inz);
+	/* and try and find him */
+	for (j = 0U; j < ninstr; j++) {
+		if (insth[j] == h) {
+			return j;
+		}
+	}
+	return -1ULL;
+}
+
 static void
 data_cb(EV_P_ ev_io *w, int UNUSED(re))
 {
@@ -425,14 +447,18 @@ data_cb(EV_P_ ev_io *w, int UNUSED(re))
 	     (x = memchr(u->buf + npr, '\n', u->bof - npr));
 	     npr = x + 1U - u->buf) {
 		omsg_t m = recv_omsg(u->buf + npr, x + 1U - (u->buf + npr));
+		size_t ins = hins(m.ins, m.inz);
 
+		if (UNLIKELY(ins > ninstr)) {
+			continue;
+		}
 		switch (m.typ) {
 		case OMSG_BUY:
 		case OMSG_SEL:
-			omsg_add_ord(u->w.fd, m.ord, u->uid);
+			omsg_add_ord(u->w.fd, ins, m.ord, u->uid);
 			break;
 		case OMSG_CAN:
-			omsg_del_oid(u->w.fd, m.oid);
+			omsg_del_oid(u->w.fd, ins, m.oid);
 			break;
 		default:
 			break;
@@ -480,10 +506,10 @@ static void
 prep_cb(EV_P_ ev_prepare *UNUSED(p), int UNUSED(re))
 {
 	for (size_t i = 0U; i < NINSTR; i++) {
-		diss_exe(clob.exe, i);
+		diss_exe(clob[i].exe, i);
 	}
 	for (size_t i = 0U; i < NINSTR; i++) {
-		diss_quo(clob.quo, i);
+		diss_quo(clob[i].quo, i);
 	}
 	return;
 }
@@ -611,9 +637,12 @@ Error: cannot open socket");
 	ev_prepare_start(EV_A_ prep);
 
 	/* get going then */
-	clob = make_clob();
-	clob.exe = make_unxs(MODE_BI);
-	clob.quo = make_quos();
+	clob = malloc(NINSTR * sizeof(*clob));
+	for (size_t i = 0U; i < NINSTR; i++) {
+		clob[i] = make_clob();
+		clob[i].exe = make_unxs(MODE_BI);
+		clob[i].quo = make_quos();
+	}
 
 	ev_signal_init(trm, sig_cb, SIGTERM);
 	ev_signal_start(EV_A_ trm);
@@ -630,9 +659,12 @@ Error: cannot open socket");
 		close(s);
 	}
 
-	free_quos(clob.quo);
-	free_unxs(clob.exe);
-	free_clob(clob);
+	for (size_t i = 0U; i < NINSTR; i++) {
+		free_quos(clob[i].quo);
+		free_unxs(clob[i].exe);
+		free_clob(clob[i]);
+	}
+	free(clob);
 
 	if (ninstr) {
 		free(instr);
