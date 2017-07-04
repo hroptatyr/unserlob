@@ -81,37 +81,37 @@ beef_cb(EV_P_ ev_io *w, int UNUSED(revents))
 	struct sockaddr_in6 sa;
 	socklen_t sz = sizeof(sa);
 	char buf[1536U];
+	char log[1536U];
 	ssize_t nrd;
 	size_t pre;
 
-	/* set metronome before anything else */
-	with (struct timespec tsp) {
-		clock_gettime(CLOCK_REALTIME_COARSE, &tsp);
-		pre = tsptostr(buf, sizeof(buf), tsp);
-	}
-	buf[pre++] = '\t';
-	pre += (memcpy(buf + pre, w->data, 3U), 3U);
-	buf[pre++] = '\t';
-	pre += nettostr(buf + pre, sizeof(buf) - pre, &sa);
-	buf[pre++] = '\t';
-
 	/* prefix finished */
 	if (UNLIKELY((nrd = recvfrom(
-			      w->fd, buf + pre, sizeof(buf) - pre, 0,
+			      w->fd, buf, sizeof(buf), 0,
 			      (struct sockaddr*)&sa, &sz)) <= 0)) {
 		return;
 	}
 
+	/* set metronome before anything else */
+	with (struct timespec tsp) {
+		clock_gettime(CLOCK_REALTIME_COARSE, &tsp);
+		pre = tsptostr(log, sizeof(log), tsp);
+	}
+	log[pre++] = '\t';
+	pre += (memcpy(log + pre, w->data, 3U), 3U);
+	log[pre++] = '\t';
+	pre += nettostr(log + pre, sizeof(log) - pre, &sa);
+	log[pre++] = '\t';
+
 	for (size_t npr = 0U, len; npr < (size_t)nrd; npr += len) {
-		char *eol = memchr(buf + pre + npr, '\n', nrd - npr);
+		char *eol = memchr(buf + npr, '\n', nrd - npr);
 
 		/* determine line length */
-		len = eol ? eol - (buf + pre + npr) : nrd - 1U;
-		/* always terminate him */
-		buf[pre + len++] = '\n';
+		len = eol ? eol - (buf + npr) : nrd;
 		/* move into place */
-		memmove(buf + pre, buf + pre + npr, len);
-		write(STDOUT_FILENO, buf, pre + len);
+		memcpy(log + pre, buf + npr, len);
+		log[pre + len++] = '\n';
+		write(STDOUT_FILENO, log, pre + len);
 	}
 	return;
 }
