@@ -79,12 +79,6 @@ qchan_cb(bot_t b, qmsg_t m)
 		/* nope, no opportunities today */
 		return;
 	}
-	char buf[256];
-	buf[send_omsg(buf, sizeof(buf), m0)] = '\0';
-	fputs(buf, stdout);
-	buf[send_omsg(buf, sizeof(buf), m1)] = '\0';
-	fputs(buf, stdout);
-
 	add_omsg(b, m0);
 	add_omsg(b, m1);
 	bot_send(b);
