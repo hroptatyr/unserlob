@@ -20,9 +20,12 @@ static double alpha = 1.;
 static double sigma = 1.;
 static double mktv = 0.;
 static px_t sprd = 0.02dd;
+static qx_t maxq;
+static qty_t Q = {500.dd, 500.dd};
 
 static clob_oid_t coid[NSIDES];
 static quos_msg_t cquo[NSIDES];
+static unxs_exa_t acc = {0.dd, 0.dd};
 
 static const char *cont;
 static size_t conz;
@@ -61,6 +64,36 @@ truv(void)
 	return truv += eps;
 }
 
+#if 0
+static inline qty_t
+minq(qty_t q, qx_t sum)
+{
+/* prefer less display */
+	if (q.hid + q.dis > sum) {
+		/* sum cannot be NAN anymore */
+		if (q.hid > sum) {
+			return (qty_t){0.dd, sum};
+		}
+		return (qty_t){sum - q.hid, q.hid};
+	}
+	return q;
+}
+#else
+static inline qty_t
+minq(qty_t q, qx_t sum)
+{
+/* prefer less hidden */
+	if (q.dis + q.hid > sum) {
+		/* sum cannot be NAN anymore */
+		if (q.dis > sum) {
+			return (qty_t){sum, 0.dd};
+		}
+		return (qty_t){q.dis, sum - q.dis};
+	}
+	return q;
+}
+#endif
+
 
 static void
 qchan_cb(bot_t UNUSED(b), qmsg_t m)
@@ -87,6 +120,10 @@ ochan_cb(bot_t UNUSED(b), omsg_t m)
 	switch (m.typ) {
 	case OMSG_OID:
 		coid[m.oid.sid] = m.oid;
+		break;
+	case OMSG_ACC:
+		acc = m.exa;
+		break;
 	default:
 		break;
 	}
@@ -98,18 +135,33 @@ hbeat_cb(bot_t b)
 {
 /* generate a random trade */
 	px_t v = quantizepx(truv(), sprd);
+	qty_t q;
 
 	/* cancel old guys */
 	add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[SIDE_BID]});
 	add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[SIDE_ASK]});
-	add_omsg(b, (omsg_t){OMSG_BUY, INS,
-				 .ord = (clob_ord_t){TYPE_LMT,
-						     .qty = {500.dd, 500.dd},
-						     .lmt = v - sprd / 2.dd}});
-	add_omsg(b, (omsg_t){OMSG_SEL, INS,
-				 .ord = (clob_ord_t){TYPE_LMT,
-						     .qty = {500.dd, 500.dd},
-						     .lmt = v + sprd / 2.dd}});
+
+	q = minq(Q, maxq - acc.base);
+	if (qty(q) > 0.dd) {
+		/* split q up in displayed and hidden */
+		omsg_t m = {
+			OMSG_BUY, INS,
+			.ord = (clob_ord_t){TYPE_LMT,
+					    .qty = q,
+					    .lmt = v - sprd / 2.dd}
+		};
+		add_omsg(b, m);
+	}
+	q = minq(Q, maxq + acc.base);
+	if (qty(q) > 0.dd) {
+		omsg_t m = {
+			OMSG_SEL, INS,
+			.ord = (clob_ord_t){TYPE_LMT,
+					    .qty = q,
+					    .lmt = v + sprd / 2.dd}
+		};
+		add_omsg(b, m);
+	}
 	bot_send(b);
 	return;
 }
@@ -146,6 +198,20 @@ main(int argc, char *argv[])
 
 	if (argi->freq_arg) {
 		freq = strtod(argi->freq_arg, NULL);
+	}
+
+	if (argi->max_arg) {
+		maxq = strtoqx(argi->max_arg, NULL);
+	} else {
+		maxq = NANQX;
+	}
+
+	if (argi->qty_arg) {
+		char *on;
+		Q.dis = strtoqx(argi->qty_arg, &on);
+		if (*on++ == '+') {
+			Q.hid = strtoqx(on, NULL);
+		}
 	}
 
 	init_rng(0ULL);
