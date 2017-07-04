@@ -111,6 +111,11 @@ qchan_cb(bot_t UNUSED(b), qmsg_t m)
 		/* calc mktv as well */
 		mktv = (cquo[SIDE_ASK].prc + cquo[SIDE_BID].prc) / 2.dd;
 		break;
+	case QMSG_AUC:
+		if (!isnanpx(m.auc.prc)) {
+			mktv = m.auc.prc;
+		}
+		break;
 	default:
 		break;
 	}
