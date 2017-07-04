@@ -1,0 +1,6 @@
+Usage: dasbot [INSTR]
+
+Market making according to Das/Magdon-Ismail
+
+  -H, --host=NAME       Connect to NAME.
+  -F, --freq=I          A round is at most I seconds long, default 1.0

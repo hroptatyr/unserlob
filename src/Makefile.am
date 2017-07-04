@@ -94,6 +94,16 @@ clampbot_LDFLAGS += $(lol_LIBS)
 clampbot_LDADD = libdfp.a liblol.a
 BUILT_SOURCES += clampbot.yucc
 
+noinst_PROGRAMS += dasbot
+dasbot_SOURCES = dasbot.c dasbot.yuck
+dasbot_CPPFLAGS = $(AM_CPPFLAGS)
+dasbot_CPPFLAGS += $(lol_CFLAGS)
+dasbot_CPPFLAGS += $(clob_CFLAGS)
+dasbot_LDFLAGS = $(AM_LDFLAGS)
+dasbot_LDFLAGS += $(lol_LIBS)
+dasbot_LDADD = libdfp.a liblol.a
+BUILT_SOURCES += dasbot.yucc
+
 
 ## version rules
 version.c: version.c.in $(top_builddir)/.version
