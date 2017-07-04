@@ -1,0 +1,6 @@
+Usage: cabot [INSTR...]
+
+Run the clob engine (in continuous auction mode).
+
+  -d, --daemonise       Run as daemon.
+  -F, --freq=I          Stop auctions every I seconds, default 1.0
