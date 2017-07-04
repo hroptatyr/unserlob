@@ -7,6 +7,7 @@
 #endif	/* HAVE_DFP754_H */
 #include "dfp754_d64.h"
 #include <mkl_vsl.h>
+#include <math.h>
 #include "bot.h"
 #include "nifty.h"
 
@@ -59,9 +60,11 @@ static double
 truv(void)
 {
 	static double truv;
-	double eps = rnorm(alpha * (mktv - truv));
 
-	return truv += eps;
+	if (LIKELY(!isnan(mktv))) {
+		truv += rnorm(alpha * (mktv - truv));
+	}
+	return truv;
 }
 
 #if 0
@@ -134,13 +137,14 @@ static void
 hbeat_cb(bot_t b)
 {
 /* generate a random trade */
-	px_t v = quantizepx(truv(), sprd);
+	px_t v;
 	qty_t q;
 
 	/* cancel old guys */
 	add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[SIDE_BID]});
 	add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[SIDE_ASK]});
 
+	v = quantizepx(truv(), sprd);
 	q = minq(Q, maxq - acc.base);
 	if (qty(q) > 0.dd) {
 		/* split q up in displayed and hidden */
