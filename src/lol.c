@@ -91,6 +91,10 @@ _send_ord(char *restrict buf, size_t bsz, clob_ord_t ord)
 	size_t len = 0U;
 
 	len += qxtostr(buf + len, bsz - len, ord.qty.dis);
+	if (ord.qty.hid > 0.dd) {
+		buf[len++] = '+';
+		len += qxtostr(buf + len, bsz - len, ord.qty.hid);
+	}
 	if (ord.typ == TYPE_LMT) {
 		buf[len++] = '\t';
 		len += pxtostr(buf + len, bsz - len, ord.lmt);
