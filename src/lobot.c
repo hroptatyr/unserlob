@@ -379,18 +379,23 @@ diss_quo(quos_t q, size_t ins)
 	if (q->n) {
 		btree_key_t k;
 		btree_val_t *v;
+		quos_msg_t t;
 
 		v = btree_top(clob[ins].lmt[SIDE_ASK], &k);
 		if (LIKELY(v != NULL)) {
-			quos_msg_t t = {SIDE_ASK, k, v->sum.dis};
-			SEND_QMSG(quot_chan, QMSG_TOP, INS(ins), .quo = t);
+			t = (quos_msg_t){SIDE_ASK, k, v->sum.dis};
+		} else {
+			t = (quos_msg_t){SIDE_ASK, NANPX, 0.dd};
 		}
+		SEND_QMSG(quot_chan, QMSG_TOP, INS(ins), .quo = t);
 
 		v = btree_top(clob[ins].lmt[SIDE_BID], &k);
 		if (LIKELY(v != NULL)) {
-			quos_msg_t t = {SIDE_BID, k, v->sum.dis};
-			SEND_QMSG(quot_chan, QMSG_TOP, INS(ins), .quo = t);
+			t = (quos_msg_t){SIDE_BID, k, v->sum.dis};
+		} else {
+			t = (quos_msg_t){SIDE_BID, NANPX, 0.dd};
 		}
+		SEND_QMSG(quot_chan, QMSG_TOP, INS(ins), .quo = t);
 	}
 	/* clear them quotes */
 	quos_clr(q);
