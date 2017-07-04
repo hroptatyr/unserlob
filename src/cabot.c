@@ -260,25 +260,6 @@ prnt_acct(int s, size_t ins)
 
 #include <assert.h>
 static void
-chck_book(void)
-{
-	for (size_t j = 0U; j < NINSTR; j++) {
-		qx_t mb = plqu_sum(clob[j].mkt[SIDE_BID]);
-		qx_t ma = plqu_sum(clob[j].mkt[SIDE_ASK]);
-
-		if (mb > 0.dd) {
-			btree_iter_t ai = {clob[j].lmt[SIDE_ASK]};
-			assert(!btree_iter_next(&ai));
-		}
-		if (ma > 0.dd) {
-			btree_iter_t bi = {clob[j].lmt[SIDE_BID]};
-			assert(!btree_iter_next(&bi));
-		}
-	}
-	return;
-}
-
-static void
 chck_acct(void)
 {
 /* account invariant is that sum of base must be 0, and sum of terms must be 0 */
@@ -334,20 +315,16 @@ diss_exe(unxs_t exe, size_t ins)
 {
 
 	for (size_t i = 0U; i < exe->n; i++) {
-		/* let the maker know before anyone else
-		 * well, the taker has already been informed */
-		const uid_t u = exe->o[MODE_BI * i + SIDE_MAKER].user;
-		const uid_t cu = exe->o[MODE_BI * i + SIDE_TAKER].user;
+		/* let the traders know before anyone else */
+		const uid_t u = exe->o[MODE_SC * i].user;
 		const clob_side_t s = (clob_side_t)exe->s[i];
-		const clob_side_t cs = clob_contra_side(s);
 		unxs_exa_t acc = add_acct(u, ins, unxs_exa(exe->x[i], s));
-		unxs_exa_t cacc = add_acct(cu, ins, unxs_exa(exe->x[i], cs));
 		char buf[256U];
 		size_t len = 0U;
 
 		len += send_omsg(buf + len, sizeof(buf) - len,
 				 (omsg_t){OMSG_FIL, INS(ins),
-						 .exe = exe->x[i], .con = cu});
+						 .exe = exe->x[i]});
 		len += send_omsg(buf + len, sizeof(buf) - len,
 				 (omsg_t){OMSG_ACC, INS(ins), .exa = acc});
 		if (LIKELY(len > 0)) {
@@ -355,21 +332,6 @@ diss_exe(unxs_t exe, size_t ins)
 			/* append user */
 			buf[len - 1U] = '\t';
 			len += snprintf(buf + len, sizeof(buf) - len, "%u", u);
-			buf[len++] = '\n';
-			write(exec_chan, buf, len);
-		}
-
-		len = 0U;
-		len += send_omsg(buf + len, sizeof(buf) - len,
-				 (omsg_t){OMSG_FIL, INS(ins),
-						 .exe = exe->x[i], .con = u});
-		len += send_omsg(buf + len, sizeof(buf) - len,
-				 (omsg_t){OMSG_ACC, INS(ins), .exa = cacc});
-		if (LIKELY(len > 0)) {
-			send(user_sock(cu), buf, len, 0);
-			/* append user */
-			buf[len - 1U] = '\t';
-			len += snprintf(buf + len, sizeof(buf) - len, "%u", cu);
 			buf[len++] = '\n';
 			write(exec_chan, buf, len);
 		}
@@ -529,8 +491,6 @@ hbeat_cb(EV_P_ ev_timer *UNUSED(w), int UNUSED(revents))
 		prnt_acct(info_chan, i);
 	}
 
-	/* check book */
-	chck_book();
 	/* check accounts */
 	chck_acct();
 	return;
@@ -659,7 +619,7 @@ Error: cannot open socket");
 	clob = malloc(NINSTR * sizeof(*clob));
 	for (size_t i = 0U; i < NINSTR; i++) {
 		clob[i] = make_clob();
-		clob[i].exe = make_unxs(MODE_BI);
+		clob[i].exe = make_unxs(MODE_SC);
 		clob[i].quo = make_quos();
 	}
 
