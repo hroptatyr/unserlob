@@ -45,6 +45,7 @@
 /* global limit order book */
 static clob_t *clob;
 static int quot_chan = STDOUT_FILENO;
+static int exec_chan = STDOUT_FILENO;
 static int info_chan = STDERR_FILENO;
 
 #define NINSTR		(ninstr ?: 1U)
@@ -331,8 +332,6 @@ omsg_del_oid(int fd, size_t i, clob_oid_t o)
 static void
 diss_exe(unxs_t exe, size_t ins)
 {
-	char buf[256U];
-	ssize_t len;
 
 	for (size_t i = 0U; i < exe->n; i++) {
 		/* let the maker know before anyone else
@@ -343,23 +342,36 @@ diss_exe(unxs_t exe, size_t ins)
 		const clob_side_t cs = clob_contra_side(s);
 		unxs_exa_t acc = add_acct(u, ins, unxs_exa(exe->x[i], s));
 		unxs_exa_t cacc = add_acct(cu, ins, unxs_exa(exe->x[i], cs));
+		char buf[256U];
+		size_t len = 0U, boa;
 
-		len = 0U;
 		len += send_omsg(buf + len, sizeof(buf) - len,
 				 (omsg_t){OMSG_FIL, INS(ins), .exe = exe->x[i]});
+		boa = len;
 		len += send_omsg(buf + len, sizeof(buf) - len,
 				 (omsg_t){OMSG_ACC, INS(ins), .exa = acc});
 		if (LIKELY(len > 0)) {
 			send(user_sock(u), buf, len, 0);
+			/* append user */
+			buf[len - 1U] = '\t';
+			len += snprintf(buf + len, sizeof(buf) - len, "U%x", u);
+			buf[len++] = '\n';
+			write(exec_chan, buf + boa, len - boa);
 		}
 
 		len = 0U;
 		len += send_omsg(buf + len, sizeof(buf) - len,
 				 (omsg_t){OMSG_FIL, INS(ins), .exe = exe->x[i]});
+		boa = len;
 		len += send_omsg(buf + len, sizeof(buf) - len,
 				 (omsg_t){OMSG_ACC, INS(ins), .exa = cacc});
 		if (LIKELY(len > 0)) {
 			send(user_sock(cu), buf, len, 0);
+			/* append user */
+			buf[len - 1U] = '\t';
+			len += snprintf(buf + len, sizeof(buf) - len, "U%x", cu);
+			buf[len++] = '\n';
+			write(exec_chan, buf + boa, len - boa);
 		}
 	}
 	for (size_t i = 0U; i < exe->n; i++) {
@@ -617,10 +629,21 @@ Error: cannot activate publishing mode on socket %d", quot_chan);
 		quot_chan = STDOUT_FILENO;
 	}
 
+	/* make exec channel multicast */
+	if (UNLIKELY((exec_chan = mc6_socket()) < 0)) {
+		serror("\
+Error: cannot open socket for quote messages");
+	} else if (mc6_set_pub(exec_chan, MCAST_ADDR, QUOTE_PORT + 1, NULL) < 0) {
+		serror("\
+Error: cannot activate publishing mode on socket %d", exec_chan);
+		close(exec_chan);
+		exec_chan = STDOUT_FILENO;
+	}
+
 	/* initialise the main loop */
 	loop = ev_default_loop(EVFLAG_AUTO);
 
-	/* init the multicast socket */
+	/* init the tcp socket for trading */
 	with (int s = listener(TRADE_PORT)) {
 		if (UNLIKELY(s < 0)) {
 			serror("\
