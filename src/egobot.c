@@ -220,6 +220,8 @@ main(int argc, char *argv[])
 		Q.dis = strtoqx(argi->qty_arg, &on);
 		if (*on++ == '+') {
 			Q.hid = strtoqx(on, NULL);
+		} else {
+			Q.hid = 0.dd;
 		}
 	}
 
