@@ -44,6 +44,29 @@ serror(const char *fmt, ...)
 	return;
 }
 
+static ssize_t
+tsptostr(char *restrict buf, size_t bsz, struct timespec tsp)
+{
+	return snprintf(buf, bsz, "%ld.%09ld", tsp.tv_sec, tsp.tv_nsec);
+}
+
+static ssize_t
+nettostr(char *restrict buf, size_t bsz, const struct sockaddr_in6 *a)
+{
+	size_t len = 0U;
+
+	if (inet_ntop(AF_INET6, &a->sin6_addr, buf + 1U, bsz - 1U) == NULL) {
+		return 0U;
+	}
+	/* otherwise wrap in brackets */
+	buf[0U] = '[';
+	len = 1U + strlen(buf + 1U);
+	buf[len++] = ']';
+	buf[len++] = ':';
+	len += snprintf(buf + len, bsz - len, "%hu", ntohs(a->sin6_port));
+	return len;
+}
+
 
 static void
 sigint_cb(EV_P_ ev_signal *UNUSED(w), int UNUSED(revents))
@@ -59,30 +82,37 @@ beef_cb(EV_P_ ev_io *w, int UNUSED(revents))
 	socklen_t sz = sizeof(sa);
 	char buf[1536U];
 	ssize_t nrd;
-	tv_t metr;
+	size_t pre;
 
-	if (UNLIKELY((nrd = recvfrom(
-			      w->fd, buf, sizeof(buf), 0,
-			      (struct sockaddr*)&sa, &sz)) < 0)) {
-		return;
-	}
 	/* set metronome before anything else */
 	with (struct timespec tsp) {
-		clock_gettime(CLOCK_REALTIME, &tsp);
-		metr = tsp.tv_sec * NSECS + tsp.tv_nsec;
+		clock_gettime(CLOCK_REALTIME_COARSE, &tsp);
+		pre = tsptostr(buf, sizeof(buf), tsp);
 	}
-	/* now snarf the line */
-	buf[nrd] = '\0';
-	fprintf(stdout, "%lu.%09lu\t%d\t", metr / NSECS, metr % NSECS, w->fd);
-	if (inet_ntop(
-		    AF_INET6, &sa.sin6_addr,
-		    buf + nrd, sizeof(buf) - nrd) != NULL) {
-		fputc('[', stdout);
-		fputs(buf + nrd, stdout);
-		fputc(']', stdout);
+	buf[pre++] = '\t';
+	pre += (memcpy(buf + pre, w->data, 3U), 3U);
+	buf[pre++] = '\t';
+	pre += nettostr(buf + pre, sizeof(buf) - pre, &sa);
+	buf[pre++] = '\t';
+
+	/* prefix finished */
+	if (UNLIKELY((nrd = recvfrom(
+			      w->fd, buf + pre, sizeof(buf) - pre, 0,
+			      (struct sockaddr*)&sa, &sz)) <= 0)) {
+		return;
 	}
-	fprintf(stdout, ":%hu\t", ntohs(sa.sin6_port));
-	fwrite(buf, sizeof(*buf), nrd, stdout);
+
+	for (size_t npr = 0U, len; npr < (size_t)nrd; npr += len) {
+		char *eol = memchr(buf + pre + npr, '\n', nrd - npr);
+
+		/* determine line length */
+		len = eol ? eol - (buf + pre + npr) : nrd - 1U;
+		/* always terminate him */
+		buf[pre + len++] = '\n';
+		/* move into place */
+		memmove(buf + pre, buf + pre + npr, len);
+		write(STDOUT_FILENO, buf, pre + len);
+	}
 	return;
 }
 
@@ -133,6 +163,7 @@ Error: cannot join multicast group on socket %d", s);
 		/* hook into our event loop */
 		ev_io_init(beef + 0U, beef_cb, s, EV_READ);
 		ev_io_start(EV_A_ beef + 0U);
+		beef[0U].data = "TAQ";
 	}
 
 	if (!argi->info_flag) {
@@ -154,6 +185,7 @@ Error: cannot join multicast group on socket %d", s);
 		/* hook into our event loop */
 		ev_io_init(beef + 1U, beef_cb, s, EV_READ);
 		ev_io_start(EV_A_ beef + 1U);
+		beef[1U].data = "STP";
 	}
 
 	with (int s) {
@@ -174,6 +206,7 @@ Error: cannot join multicast group on socket %d", s);
 		/* hook into our event loop */
 		ev_io_init(beef + 2U, beef_cb, s, EV_READ);
 		ev_io_start(EV_A_ beef + 2U);
+		beef[2U].data = "NFO";
 	}
 
 	/* now wait for events to arrive */
