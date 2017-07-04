@@ -182,7 +182,7 @@ _recv_exe(const char *msg, size_t UNUSED(msz))
 	r.prc = strtopx(on, &on);
 	return r;
 nil:
-	return (unxs_exe_t){NANQX, NANPX};
+	return (unxs_exe_t){0.dd, NANPX};
 }
 
 static quos_msg_t
@@ -198,7 +198,7 @@ _recv_tra(const char *msg, size_t UNUSED(msz))
 	r.new = strtoqx(on, &on);
 	return r;
 nil:
-	return (quos_msg_t){NSIDES, NANPX, NANQX};
+	return (quos_msg_t){NSIDES, NANPX, 0.dd};
 }
 
 static quos_msg_t
@@ -216,7 +216,7 @@ _recv_quo(const char *msg, const char *quo, size_t UNUSED(msz))
 	return r;
 nil:
 	r.prc = NANPX;
-	r.new = NANQX;
+	r.new = 0.dd;
 	return r;
 }
 
