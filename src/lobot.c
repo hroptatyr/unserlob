@@ -343,35 +343,35 @@ diss_exe(unxs_t exe, size_t ins)
 		unxs_exa_t acc = add_acct(u, ins, unxs_exa(exe->x[i], s));
 		unxs_exa_t cacc = add_acct(cu, ins, unxs_exa(exe->x[i], cs));
 		char buf[256U];
-		size_t len = 0U, boa;
+		size_t len = 0U;
 
 		len += send_omsg(buf + len, sizeof(buf) - len,
-				 (omsg_t){OMSG_FIL, INS(ins), .exe = exe->x[i]});
-		boa = len;
+				 (omsg_t){OMSG_FIL, INS(ins),
+						 .exe = exe->x[i], .con = cu});
 		len += send_omsg(buf + len, sizeof(buf) - len,
 				 (omsg_t){OMSG_ACC, INS(ins), .exa = acc});
 		if (LIKELY(len > 0)) {
 			send(user_sock(u), buf, len, 0);
 			/* append user */
 			buf[len - 1U] = '\t';
-			len += snprintf(buf + len, sizeof(buf) - len, "U%x", u);
+			len += snprintf(buf + len, sizeof(buf) - len, "%u", u);
 			buf[len++] = '\n';
-			write(exec_chan, buf + boa, len - boa);
+			write(exec_chan, buf, len);
 		}
 
 		len = 0U;
 		len += send_omsg(buf + len, sizeof(buf) - len,
-				 (omsg_t){OMSG_FIL, INS(ins), .exe = exe->x[i]});
-		boa = len;
+				 (omsg_t){OMSG_FIL, INS(ins),
+						 .exe = exe->x[i], .con = u});
 		len += send_omsg(buf + len, sizeof(buf) - len,
 				 (omsg_t){OMSG_ACC, INS(ins), .exa = cacc});
 		if (LIKELY(len > 0)) {
 			send(user_sock(cu), buf, len, 0);
 			/* append user */
 			buf[len - 1U] = '\t';
-			len += snprintf(buf + len, sizeof(buf) - len, "U%x", cu);
+			len += snprintf(buf + len, sizeof(buf) - len, "%u", cu);
 			buf[len++] = '\n';
-			write(exec_chan, buf + boa, len - boa);
+			write(exec_chan, buf, len);
 		}
 	}
 	for (size_t i = 0U; i < exe->n; i++) {

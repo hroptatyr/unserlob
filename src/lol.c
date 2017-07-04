@@ -15,6 +15,10 @@
 #define strtoqx		strtod64
 #define qxtostr		d64tostr
 
+struct fil_s {
+	unxs_exe_t exe;
+	uid_t con;
+};
 
 
 /**
@@ -162,21 +166,24 @@ nil:
 }
 
 static ssize_t
-_send_exe(char *restrict buf, size_t bsz, unxs_exe_t x)
+_send_exe(char *restrict buf, size_t bsz, unxs_exe_t x, uid_t u)
 {
 	size_t len = 0U;
 
 	len += qxtostr(buf + len, bsz - len, x.qty);
 	buf[len++] = '\t';
 	len += pxtostr(buf + len, bsz - len, x.prc);
+	buf[len++] = '\t';
+	len += snprintf(buf + len, bsz - len, "%u", u);
 	buf[len++] = '\n';
 	return len;
 }
 
-static unxs_exe_t
-_recv_exe(const char *msg, size_t UNUSED(msz))
+static struct fil_s
+_recv_fil(const char *msg, size_t UNUSED(msz))
 {
 	unxs_exe_t r;
+	uid_t u;
 	char *on;
 
 	r.qty = strtoqx(msg, &on);
@@ -184,9 +191,10 @@ _recv_exe(const char *msg, size_t UNUSED(msz))
 		goto nil;
 	}
 	r.prc = strtopx(on, &on);
-	return r;
+	u = strtoul(on, &on, 0);
+	return (struct fil_s){r, u};
 nil:
-	return (unxs_exe_t){0.dd, NANPX};
+	return (struct fil_s){(unxs_exe_t){0.dd, NANPX}, 0};
 }
 
 static quos_msg_t
@@ -250,7 +258,7 @@ UNK\tACC\tFIL\tKIL\tNOK\tOID\tBUY\tSEL\tCAN\tORD\t";
 	case OMSG_ACC:
 		return len + _send_exa(buf + len, bsz - len, msg.exa);
 	case OMSG_FIL:
-		return len + _send_exe(buf + len, bsz - len, msg.exe);
+		return len + _send_exe(buf + len, bsz - len, msg.exe, msg.con);
 	case OMSG_KIL:
 		return len + _send_oid(buf + len, bsz - len, msg.oid);
 	case OMSG_NOK:
@@ -282,8 +290,9 @@ recv_omsg(const char *msg, size_t msz)
 		return (omsg_t){OMSG_ACC, .ins = ins, .inz = eoi - ins,
 				.exa = _recv_exa(eoi + 1U, msz - 1U)};
 	} else if (!memcmp(msg, "FIL\t", 4U)) {
+		struct fil_s f = _recv_fil(eoi + 1U, msz - 1U);
 		return (omsg_t){OMSG_FIL, .ins = ins, .inz = eoi - ins,
-				.exe = _recv_exe(eoi + 1U, msz - 1U)};
+				.exe = f.exe, .con = f.con};
 	} else if (!memcmp(msg, "KIL\t", 4U)) {
 		return (omsg_t){OMSG_KIL, .ins = ins, .inz = eoi - ins,
 				.oid = _recv_oid(eoi + 1U, msz - 1U)};

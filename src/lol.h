@@ -28,7 +28,10 @@ typedef struct {
 		clob_ord_t ord;
 		clob_oid_t oid;
 		unxs_exa_t exa;
-		unxs_exe_t exe;
+		struct {
+			unxs_exe_t exe;
+			uid_t con;
+		};
 	};
 } omsg_t;
 
