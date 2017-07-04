@@ -25,7 +25,7 @@ static const char *cont[2U];
 static size_t conz[2U];
 #define INS0		.ins = cont[0U], .inz = conz[0U]
 #define INS1		.ins = cont[1U], .inz = conz[1U]
-
+#include <stdio.h>
 
 static void
 qchan_cb(bot_t b, qmsg_t m)
@@ -35,6 +35,7 @@ qchan_cb(bot_t b, qmsg_t m)
 	switch (m.typ) {
 	case QMSG_TOP:
 		if (0) {
+			;
 		} else if (!memcmp(m.ins, cont[0U], conz[0U])) {
 			cquo[0U][m.quo.sid] = m.quo;
 			break;
@@ -46,27 +47,44 @@ qchan_cb(bot_t b, qmsg_t m)
 	default:
 		return;
 	}
+
 	/* check opportunities */
 	if (0) {
 		;
 	} else if (cquo[0U][SIDE_ASK].prc - cquo[1U][SIDE_BID].prc < dif ||
 		   cquo[0U][SIDE_ASK].prc / cquo[1U][SIDE_BID].prc < quo) {
+		qx_t q = min(Q, min(cquo[0U][SIDE_ASK].new, cquo[1U][SIDE_BID].new));
+		if (q <= 0.dd) {
+			/* not enough size */
+			return;
+		}
 		/* go long C0/C1-spread */
 		m0.typ = OMSG_BUY;
-		m0.ord = (clob_ord_t){TYPE_MKT, .qty = {Q, 0.dd}};
+		m0.ord = (clob_ord_t){TYPE_MKT, .qty = {q, 0.dd}};
 		m1.typ = OMSG_SEL;
-		m1.ord = (clob_ord_t){TYPE_MKT, .qty = {Q, 0.dd}};
+		m1.ord = (clob_ord_t){TYPE_MKT, .qty = {q, 0.dd}};
 	} else if (cquo[0U][SIDE_BID].prc - cquo[1U][SIDE_ASK].prc > dif ||
 		   cquo[0U][SIDE_BID].prc / cquo[1U][SIDE_ASK].prc > quo) {
+		qx_t q = min(Q, min(cquo[0U][SIDE_BID].new, cquo[1U][SIDE_ASK].new));
+		if (q <= 0.dd) {
+			/* not enough size */
+			return;
+		}
 		/* go short C0/C1-spread */
 		m0.typ = OMSG_SEL;
-		m0.ord = (clob_ord_t){TYPE_MKT, .qty = {Q, 0.dd}};
+		m0.ord = (clob_ord_t){TYPE_MKT, .qty = {q, 0.dd}};
 		m1.typ = OMSG_BUY;
-		m1.ord = (clob_ord_t){TYPE_MKT, .qty = {Q, 0.dd}};
+		m1.ord = (clob_ord_t){TYPE_MKT, .qty = {q, 0.dd}};
 	} else {
 		/* nope, no opportunities today */
 		return;
 	}
+	char buf[256];
+	buf[send_omsg(buf, sizeof(buf), m0)] = '\0';
+	fputs(buf, stdout);
+	buf[send_omsg(buf, sizeof(buf), m1)] = '\0';
+	fputs(buf, stdout);
+
 	add_omsg(b, m0);
 	add_omsg(b, m1);
 	bot_send(b);
@@ -119,9 +137,18 @@ Error: need a difference or quotient spread.\n", stderr);
 		goto out;
 	}
 
+	if (argi->quantity_arg) {
+		Q = strtoqx(argi->quantity_arg, NULL);
+	}
+
 	if (argi->host_arg) {
 		host = argi->host_arg;
 	}
+
+	cquo[0U][SIDE_BID].prc = NANPX;
+	cquo[0U][SIDE_ASK].prc = NANPX;
+	cquo[1U][SIDE_BID].prc = NANPX;
+	cquo[1U][SIDE_ASK].prc = NANPX;
 
 	/* initialise the bot */
 	if (UNLIKELY((b = make_bot(host)) == NULL)) {
