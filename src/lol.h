@@ -4,6 +4,7 @@
 #include <clob/clob.h>
 #include <clob/unxs.h>
 #include <clob/quos.h>
+#include <clob/mmod-auction.h>
 
 typedef long unsigned int tv_t;
 
@@ -41,11 +42,13 @@ typedef struct {
 		QMSG_TOP,
 		QMSG_LVL,
 		QMSG_TRA,
+		QMSG_AUC,
 	} typ;
 	const char *ins;
 	const size_t inz;
 	union {
 		quos_msg_t quo;
+		mmod_auc_t auc;
 	};
 } qmsg_t;
 

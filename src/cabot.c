@@ -385,10 +385,7 @@ diss_exe(unxs_t exe, size_t ins)
 static void
 diss_auc(mmod_auc_t a, size_t ins)
 {
-	SEND_QMSG(quot_chan, QMSG_TOP, INS(ins),
-		  .quo = (quos_msg_t){SIDE_ASK, a.prc, a.qty});
-	SEND_QMSG(quot_chan, QMSG_TOP, INS(ins),
-		  .quo = (quos_msg_t){SIDE_BID, a.prc, a.qty});
+	SEND_QMSG(quot_chan, QMSG_AUC, INS(ins), .auc = a);
 	return;
 }
 
@@ -508,6 +505,7 @@ hbeat_cb(EV_P_ ev_timer *UNUSED(w), int UNUSED(revents))
 			mmod_auc_t auc = mmod_auction(clob[i]);
 			diss_auc(auc, i);
 		}
+		return;
 	}
 	/* otherwise really do it */
 	for (size_t i = 0U; i < NINSTR; i++) {
