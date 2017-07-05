@@ -139,6 +139,19 @@ kill_user(uid_t u)
 	return 0;
 }
 
+static btree_val_t*
+find_top(btree_t t, btree_key_t *restrict k)
+{
+/* like btree_top but don't report back dark levels */
+	for (btree_iter_t ti = {t}; btree_iter_next(&ti);) {
+		if (LIKELY(ti.v->sum.dis > 0.dd)) {
+			*k = ti.k;
+			return ti.v;
+		}
+	}
+	return NULL;
+}
+
 
 #define SEND_OMSG(fd, x...)						\
 	do {								\
@@ -393,7 +406,7 @@ diss_quo(quos_t q, size_t ins)
 		btree_val_t *v;
 		quos_msg_t t;
 
-		v = btree_top(clob[ins].lmt[SIDE_ASK], &k);
+		v = find_top(clob[ins].lmt[SIDE_ASK], &k);
 		if (LIKELY(v != NULL)) {
 			t = (quos_msg_t){SIDE_ASK, k, v->sum.dis};
 		} else {
@@ -401,7 +414,7 @@ diss_quo(quos_t q, size_t ins)
 		}
 		SEND_QMSG(quot_chan, QMSG_TOP, INS(ins), .quo = t);
 
-		v = btree_top(clob[ins].lmt[SIDE_BID], &k);
+		v = find_top(clob[ins].lmt[SIDE_BID], &k);
 		if (LIKELY(v != NULL)) {
 			t = (quos_msg_t){SIDE_BID, k, v->sum.dis};
 		} else {
