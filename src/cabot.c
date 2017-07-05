@@ -37,7 +37,7 @@
 #define MCAST_ADDR	"ff05::134"
 #define QUOTE_PORT	7978
 #define TRADE_PORT	7979
-#define DEBUG_PORT	7977
+#define ORDER_PORT	7977
 
 #undef EV_P
 #define EV_P  struct ev_loop *loop __attribute__((unused))
@@ -590,7 +590,7 @@ Error: cannot activate publishing mode on socket %d", quot_chan);
 	if (UNLIKELY((exec_chan = mc6_socket()) < 0)) {
 		serror("\
 Error: cannot open socket for quote messages");
-	} else if (mc6_set_pub(exec_chan, MCAST_ADDR, QUOTE_PORT + 1, NULL) < 0) {
+	} else if (mc6_set_pub(exec_chan, MCAST_ADDR, TRADE_PORT, NULL) < 0) {
 		serror("\
 Error: cannot activate publishing mode on socket %d", exec_chan);
 		close(exec_chan);

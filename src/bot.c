@@ -19,11 +19,14 @@
 #define MCAST_ADDR	"ff05::134"
 #define QUOTE_PORT	7978
 #define TRADE_PORT	7979
-#define DEBUG_PORT	7977
+#define ORDER_PORT	7977
 
 /* private version of bot_t */
 struct _bot_s {
 	struct bot_s parent;
+
+	int prs;
+	struct sockaddr_in6 pre;
 
 	ev_io och[1U];
 	ev_io qch[1U];
@@ -171,7 +174,6 @@ make_bot(const char *host)
 {
 	struct _bot_s *r;
 	int s;
- 
 
 	/* initialise the main loop */
 	loop = ev_default_loop(EVFLAG_AUTO);
@@ -198,6 +200,24 @@ Error: cannot open socket for execution messages");
 	ev_signal_start(EV_A_ r->itr);
 	ev_signal_init(r->trm, _sig_cb, SIGTERM);
 	ev_signal_start(EV_A_ r->trm);
+
+	/* initialise the drop copy channel */
+	if ((r->prs = mc6_socket()) >= 0) {
+		r->pre = (struct sockaddr_in6){
+			.sin6_family = AF_INET6,
+			.sin6_addr = IN6ADDR_ANY_INIT,
+			.sin6_port = htons(ORDER_PORT),
+			.sin6_flowinfo = 0,
+			.sin6_scope_id = 0,
+		};
+		/* we pick link-local here for simplicity */
+		if (inet_pton(AF_INET6, MCAST_ADDR, &r->pre.sin6_addr) < 0) {
+			serror("\
+Warning: cannot open drop-copy channel");
+			close(r->prs);
+			r->prs = -1;
+		}
+	}
 	return (void*)r;
 
 nil:
@@ -314,6 +334,11 @@ bot_send(bot_t b)
 		return 0;
 	}
 	rc = send(r->och->fd, buf, r->mbof, 0) > 0;
+	/* drop copy to multicast channel */
+	if (r->prs > 0) {
+		sendto(r->prs, buf, r->mbof, 0,
+		       (struct sockaddr*)&r->pre, sizeof(r->pre));
+	}
 	r->mbof = 0U;
 	return rc - 1;
 }

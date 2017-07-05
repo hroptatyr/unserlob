@@ -206,7 +206,7 @@ Error: cannot join multicast group on socket %d", s);
 		/* hook into our event loop */
 		ev_io_init(beef + 2U, beef_cb, s, EV_READ);
 		ev_io_start(EV_A_ beef + 2U);
-		beef[2U].data = "NFO";
+		beef[2U].data = "PRE";
 	}
 
 	/* now wait for events to arrive */
