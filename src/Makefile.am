@@ -63,6 +63,21 @@ lobot_LDFLAGS += $(dfp754_LIBS)
 lobot_LDADD = libdfp.a liblol.a
 BUILT_SOURCES += lobot.yucc
 
+noinst_PROGRAMS += cabot
+cabot_SOURCES = cabot.c cabot.yuck
+cabot_SOURCES += sock.c sock.h
+cabot_SOURCES += hash.c hash.h
+cabot_CPPFLAGS = $(AM_CPPFLAGS)
+cabot_CPPFLAGS += $(ev_CFLAGS)
+cabot_CPPFLAGS += $(clob_CFLAGS)
+cabot_CPPFLAGS += $(dfp754_CFLAGS)
+cabot_LDFLAGS = $(AM_LDFLAGS)
+cabot_LDFLAGS += $(ev_LIBS)
+cabot_LDFLAGS += $(clob_LIBS)
+cabot_LDFLAGS += $(dfp754_LIBS)
+cabot_LDADD = libdfp.a liblol.a
+BUILT_SOURCES += cabot.yucc
+
 noinst_PROGRAMS += monkey
 monkey_SOURCES = monkey.c monkey.yuck
 monkey_SOURCES += pcg_basic.c pcg_basic.h

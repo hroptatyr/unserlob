@@ -213,6 +213,23 @@ nil:
 	return (quos_msg_t){NSIDES, NANPX, 0.dd};
 }
 
+static mmod_auc_t
+_recv_auc(const char *msg, size_t UNUSED(msz))
+{
+	mmod_auc_t r;
+	char *on;
+
+	r.prc = strtopx(msg, &on);
+	if (*on++ != '\t') {
+		goto nil;
+	}
+	r.imb = strtoqx(on, &on);
+	r.qty = 0.dd;
+	return r;
+nil:
+	return (mmod_auc_t){NANPX, 0.dd, 0.dd};
+}
+
 static quos_msg_t
 _recv_quo(const char *msg, const char *quo, size_t UNUSED(msz))
 {
@@ -318,20 +335,20 @@ send_qmsg(char *restrict buf, size_t bsz, qmsg_t msg)
 {
 	size_t len = 0U;
 
-	switch (msg.quo.sid) {
-	case SIDE_ASK:
-	case SIDE_BID:
-		buf[len++] = (char)(msg.quo.sid + 'A');
-		buf[len++] = (char)(msg.typ ^ '0');
-		buf[len++] = '\t';
-		goto quo;;
-	default:
-		if (msg.typ != QMSG_TRA) {
-			return 0;
+	switch (msg.typ) {
+	case QMSG_TOP:
+	case QMSG_LVL:
+		switch (msg.quo.sid) {
+		case SIDE_ASK:
+		case SIDE_BID:
+			buf[len++] = (char)(msg.quo.sid + 'A');
+			buf[len++] = (char)(msg.typ ^ '0');
+			buf[len++] = '\t';
+			goto quo;
 		}
+		return 0;
+	case QMSG_TRA:
 		len = (memcpy(buf + len, "TRA\t", 4U), 4U);
-		goto quo;
-
 	quo:
 		len += (memcpy(buf + len, msg.ins, msg.inz), msg.inz);
 		buf[len++] = '\t';
@@ -339,6 +356,18 @@ send_qmsg(char *restrict buf, size_t bsz, qmsg_t msg)
 		buf[len++] = '\t';
 		len += qxtostr(buf + len, bsz - len, msg.quo.new);
 		buf[len++] = '\n';
+		break;
+	case QMSG_AUC:
+		len = (memcpy(buf + len, "AUC\t", 4U), 4U);
+		len += (memcpy(buf + len, msg.ins, msg.inz), msg.inz);
+		buf[len++] = '\t';
+		len += pxtostr(buf + len, bsz - len, msg.auc.prc);
+		buf[len++] = '\t';
+		len += qxtostr(buf + len, bsz - len, msg.auc.imb);
+		buf[len++] = '\n';
+		break;
+	default:
+		return 0;
 	}
 	return len;
 }
@@ -350,6 +379,9 @@ recv_qmsg(const char *msg, size_t msz)
 		const char *ins, *eoi;
 
 	case 'A':
+		if (!memcmp(msg, "AUC\t", 4U)) {
+			goto auc;
+		}
 	case 'B':
 		if (UNLIKELY(msg[2U] != '\t')) {
 			break;
@@ -385,6 +417,16 @@ recv_qmsg(const char *msg, size_t msz)
 		}
 		return (qmsg_t){QMSG_TRA, ins, eoi - ins,
 				.quo = _recv_tra(eoi + 1U, msz - 1U)};
+	auc:
+		/* snarf instrument */
+		ins = msg + 4U;
+		eoi = memchr(msg + 4U, '\t', msz - 4U);
+		msz -= eoi - msg;
+		if (UNLIKELY(eoi == NULL)) {
+			break;
+		}
+		return (qmsg_t){QMSG_AUC, ins, eoi - ins,
+				.auc = _recv_auc(eoi + 1U, msz - 1U)};
 	default:
 		break;
 	}
