@@ -8,3 +8,5 @@ Trading bot that randomly sends out orders.
   --max=P               Maximum position, default: unlimited.
   -Q, --qty=Q[+H]       Post a quantity of Q (and H hidden),
                         default: 500+500
+  --sigma=X             Use X for sigma, default: 1.0
+  --alpha=X             Use X for alpha, default: 1.0

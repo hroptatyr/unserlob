@@ -225,6 +225,19 @@ main(int argc, char *argv[])
 		}
 	}
 
+	if (argi->sigma_arg) {
+		if ((sigma = strtod(argi->sigma_arg, NULL)) <= 0.) {
+			fputs("\
+Error: argument to sigma must not be non-positive\n", stderr);
+			rc = 1;
+			goto out;
+		}
+	}
+
+	if (argi->alpha_arg) {
+		alpha = strtod(argi->alpha_arg, NULL);
+	}
+
 	init_rng(0ULL);
 
 	/* initialise the bot */
