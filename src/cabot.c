@@ -316,22 +316,24 @@ diss_exe(unxs_t exe, size_t ins)
 
 	for (size_t i = 0U; i < exe->n; i++) {
 		/* let the traders know before anyone else */
-		const uid_t u = exe->o[MODE_SC * i].user;
+		const clob_oid_t o = exe->o[MODE_SC * i];
 		const clob_side_t s = (clob_side_t)exe->s[i];
-		unxs_exa_t acc = add_acct(u, ins, unxs_exa(exe->x[i], s));
+		unxs_exa_t a = add_acct(o.user, ins, unxs_exa(exe->x[i], s));
 		char buf[256U];
 		size_t len = 0U;
 
 		len += send_omsg(buf + len, sizeof(buf) - len,
 				 (omsg_t){OMSG_FIL, INS(ins),
+						 .fid = o,
 						 .exe = exe->x[i]});
 		len += send_omsg(buf + len, sizeof(buf) - len,
-				 (omsg_t){OMSG_ACC, INS(ins), .exa = acc});
+				 (omsg_t){OMSG_ACC, INS(ins), .exa = a});
 		if (LIKELY(len > 0)) {
-			send(user_sock(u), buf, len, 0);
+			send(user_sock(o.user), buf, len, 0);
 			/* append user */
 			buf[len - 1U] = '\t';
-			len += snprintf(buf + len, sizeof(buf) - len, "%u", u);
+			len += snprintf(buf + len, sizeof(buf) - len,
+					"%u", (uid_t)o.user);
 			buf[len++] = '\n';
 			write(exec_chan, buf, len);
 		}

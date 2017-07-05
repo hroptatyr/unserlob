@@ -347,27 +347,29 @@ diss_exe(unxs_t exe, size_t ins)
 {
 
 	for (size_t i = 0U; i < exe->n; i++) {
-		/* let the maker know before anyone else
-		 * well, the taker has already been informed */
-		const uid_t u = exe->o[MODE_BI * i + SIDE_MAKER].user;
-		const uid_t cu = exe->o[MODE_BI * i + SIDE_TAKER].user;
-		const clob_side_t s = (clob_side_t)exe->s[i];
-		const clob_side_t cs = clob_contra_side(s);
-		unxs_exa_t acc = add_acct(u, ins, unxs_exa(exe->x[i], s));
-		unxs_exa_t cacc = add_acct(cu, ins, unxs_exa(exe->x[i], cs));
+		/* let the market participants know before anyone else */
+		const clob_oid_t so = exe->o[MODE_BI * i + SIDE_MAKER];
+		const clob_oid_t co = exe->o[MODE_BI * i + SIDE_TAKER];
+		const clob_side_t ss = (clob_side_t)exe->s[i];
+		const clob_side_t cs = clob_contra_side(ss);
+		unxs_exa_t sa = add_acct(so.user, ins, unxs_exa(exe->x[i], ss));
+		unxs_exa_t ca = add_acct(co.user, ins, unxs_exa(exe->x[i], cs));
 		char buf[256U];
 		size_t len = 0U;
 
 		len += send_omsg(buf + len, sizeof(buf) - len,
 				 (omsg_t){OMSG_FIL, INS(ins),
-						 .exe = exe->x[i], .con = cu});
+						 .fid = so,
+						 .exe = exe->x[i],
+						 .con = co.user});
 		len += send_omsg(buf + len, sizeof(buf) - len,
-				 (omsg_t){OMSG_ACC, INS(ins), .exa = acc});
+				 (omsg_t){OMSG_ACC, INS(ins), .exa = sa});
 		if (LIKELY(len > 0)) {
-			send(user_sock(u), buf, len, 0);
-			/* append user */
+			send(user_sock(so.user), buf, len, 0);
+			/* append user to account (non-lol compliant) */
 			buf[len - 1U] = '\t';
-			len += snprintf(buf + len, sizeof(buf) - len, "%u", u);
+			len += snprintf(buf + len, sizeof(buf) - len,
+					"%u", (uid_t)so.user);
 			buf[len++] = '\n';
 			write(exec_chan, buf, len);
 		}
@@ -375,14 +377,17 @@ diss_exe(unxs_t exe, size_t ins)
 		len = 0U;
 		len += send_omsg(buf + len, sizeof(buf) - len,
 				 (omsg_t){OMSG_FIL, INS(ins),
-						 .exe = exe->x[i], .con = u});
+						 .fid = co,
+						 .exe = exe->x[i],
+						 .con = so.user});
 		len += send_omsg(buf + len, sizeof(buf) - len,
-				 (omsg_t){OMSG_ACC, INS(ins), .exa = cacc});
+				 (omsg_t){OMSG_ACC, INS(ins), .exa = ca});
 		if (LIKELY(len > 0)) {
-			send(user_sock(cu), buf, len, 0);
-			/* append user */
+			send(user_sock(co.user), buf, len, 0);
+			/* append user (non-lol compliant) */
 			buf[len - 1U] = '\t';
-			len += snprintf(buf + len, sizeof(buf) - len, "%u", cu);
+			len += snprintf(buf + len, sizeof(buf) - len,
+					"%u", (uid_t)co.user);
 			buf[len++] = '\n';
 			write(exec_chan, buf, len);
 		}

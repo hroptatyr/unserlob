@@ -30,6 +30,7 @@ typedef struct {
 		clob_oid_t oid;
 		unxs_exa_t exa;
 		struct {
+			clob_oid_t fid;
 			unxs_exe_t exe;
 			uid_t con;
 		};
