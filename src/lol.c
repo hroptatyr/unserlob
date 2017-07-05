@@ -26,7 +26,7 @@ struct fil_s {
 /**
  * lobot language
  * - there's qmsg for trades and quotes
- * - there's omsg for orders and post-trade conversation
+ * - there's omsg for pre-trade and post-trade conversation
  *
  * QMSGs (wire):
  * <-A1, B1  top-level ask, bid
