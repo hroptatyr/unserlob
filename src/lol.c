@@ -15,7 +15,9 @@
 #define strtoqx		strtod64
 #define qxtostr		d64tostr
 
+/* this one should mirror the anonymous struct in lol.h */
 struct fil_s {
+	clob_oid_t fid;
 	unxs_exe_t exe;
 	uid_t con;
 };
@@ -34,7 +36,8 @@ struct fil_s {
  * OMSGs (wire):
  * ->BUY \t INS \t Q[+H] [\t P]  buy Q quantities at P or market, H is hidden
  * ->SEL \t INS \t Q[+H] [\t P]  sell Q quantities at P or market, H is hidden
- * <-FIL \t INS \t Q \t P        Q quantities got filled at P
+ * <-FIL \t INS \t Q \t P \t U [\t X]  Order X has Q quantities filled at P,
+ *                                     contra firm is U
  * <-ACC \t INS \t B \t T        account balance is B base and T terms
  * <-OID \t INS \t X             order was accepted with id X
  * ->CAN \t INS \t X             cancel order X
@@ -180,8 +183,9 @@ _send_exe(char *restrict buf, size_t bsz, unxs_exe_t x, uid_t u)
 }
 
 static struct fil_s
-_recv_fil(const char *msg, size_t UNUSED(msz))
+_recv_fil(const char *msg, size_t msz)
 {
+	clob_oid_t o;
 	unxs_exe_t r;
 	uid_t u;
 	char *on;
@@ -192,9 +196,13 @@ _recv_fil(const char *msg, size_t UNUSED(msz))
 	}
 	r.prc = strtopx(on, &on);
 	u = strtoul(on, &on, 0);
-	return (struct fil_s){r, u};
+	/* there's possibly an order id coming now */
+	if (*on++ == '\t') {
+		o = _recv_oid(on, msz - (on - msg));
+	}
+	return (struct fil_s){o, r, u};
 nil:
-	return (struct fil_s){(unxs_exe_t){0.dd, NANPX}, 0};
+	return (struct fil_s){.exe = (unxs_exe_t){0.dd, NANPX}};
 }
 
 static quos_msg_t
@@ -275,7 +283,13 @@ UNK\tACC\tFIL\tKIL\tNOK\tOID\tBUY\tSEL\tCAN\tORD\t";
 	case OMSG_ACC:
 		return len + _send_exa(buf + len, bsz - len, msg.exa);
 	case OMSG_FIL:
-		return len + _send_exe(buf + len, bsz - len, msg.exe, msg.con);
+		len += _send_exe(buf + len, bsz - len, msg.exe, msg.con);
+		/* possibly sending the order id as well */
+		if (msg.fid.qid) {
+			buf[len - 1] = '\t';
+			len += _send_oid(buf + len, bsz - len, msg.fid);
+		}
+		return len;
 	case OMSG_KIL:
 		return len + _send_oid(buf + len, bsz - len, msg.oid);
 	case OMSG_NOK:
