@@ -27,6 +27,9 @@ extern void
 mc6_leave_group(int s, struct ipv6_mreq *mreq);
 
 extern int
+mc6_set_sub(int s);
+
+extern int
 mc6_set_pub(int s, const char *addr, short unsigned int port, const char *ifc);
 
 /* tcp shit */
