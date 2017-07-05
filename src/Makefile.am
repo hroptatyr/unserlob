@@ -48,7 +48,7 @@ lobmon_LDFLAGS = $(AM_LDFLAGS)
 lobmon_LDFLAGS += $(ev_LIBS)
 BUILT_SOURCES += lobmon.yucc
 
-noinst_PROGRAMS += lobot
+bin_PROGRAMS += lobot
 lobot_SOURCES = lobot.c lobot.yuck
 lobot_SOURCES += sock.c sock.h
 lobot_SOURCES += hash.c hash.h
@@ -63,7 +63,7 @@ lobot_LDFLAGS += $(dfp754_LIBS)
 lobot_LDADD = libdfp.a liblol.a
 BUILT_SOURCES += lobot.yucc
 
-noinst_PROGRAMS += cabot
+bin_PROGRAMS += cabot
 cabot_SOURCES = cabot.c cabot.yuck
 cabot_SOURCES += sock.c sock.h
 cabot_SOURCES += hash.c hash.h
