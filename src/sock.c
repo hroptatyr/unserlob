@@ -170,6 +170,33 @@ mc6_leave_group(int s, struct ipv6_mreq *mreq)
 }
 
 int
+mc6_set_sub(int s)
+{
+	struct sockaddr_in6 sa = {
+		.sin6_family = AF_INET6,
+		.sin6_addr = IN6ADDR_ANY_INIT,
+		.sin6_port = 0,
+		.sin6_flowinfo = 0,
+		.sin6_scope_id = 0,
+	};
+	int opt;
+
+#if defined IPV6_DONTFRAG
+	/* rather drop a packet than to fragment it */
+	opt = 1;
+	setsockopt(s, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &opt, sizeof(opt));
+#endif
+#if defined IPV6_MULTICAST_HOPS
+	opt = UDP_MULTICAST_TTL;
+	/* turn into a mcast sock and set a TTL */
+	setsockopt(s, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &opt, sizeof(opt));
+#endif	/* IPV6_MULTICAST_HOPS */
+
+	/* and do the bind() so we can use recv() messages */
+	return bind(s, (struct sockaddr*)&sa, sizeof(sa));
+}
+
+int
 mc6_set_pub(int s, const char *addr, short unsigned int port, const char *iface)
 {
 	struct sockaddr_in6 sa = {
