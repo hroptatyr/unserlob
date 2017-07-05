@@ -263,7 +263,7 @@ send_omsg(char *restrict buf, size_t bsz, omsg_t msg)
 {
 	/* must be the same order as omsg enum */
 	static const char typ[] = "\
-UNK\tACC\tFIL\tKIL\tNOK\tOID\tBUY\tSEL\tCAN\tORD\t";
+UNK\tACC\tFIL\tKIL\tNOK\tOID\tSEL\tBUY\tCAN\tORD\t";
 	size_t len = 0U;
 
 	len += (memcpy(buf, typ + 4U * msg.typ, 4U), 4U);
