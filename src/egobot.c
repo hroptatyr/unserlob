@@ -154,8 +154,8 @@ hbeat_cb(bot_t b)
 	if (qty(q) > 0.dd) {
 		/* split q up in displayed and hidden */
 		omsg_t m = {
-			OMSG_BUY, INS,
-			.ord = (clob_ord_t){TYPE_LMT,
+			OMSG_ORD, INS,
+			.ord = (clob_ord_t){TYPE_LMT, SIDE_LONG,
 					    .qty = q,
 					    .lmt = v - sprd / 2.dd}
 		};
@@ -164,8 +164,8 @@ hbeat_cb(bot_t b)
 	q = minq(Q, maxq + acc.base);
 	if (qty(q) > 0.dd) {
 		omsg_t m = {
-			OMSG_SEL, INS,
-			.ord = (clob_ord_t){TYPE_LMT,
+			OMSG_ORD, INS,
+			.ord = (clob_ord_t){TYPE_LMT, SIDE_SHORT,
 					    .qty = q,
 					    .lmt = v + sprd / 2.dd}
 		};

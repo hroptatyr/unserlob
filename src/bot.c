@@ -301,18 +301,6 @@ add_omsg(bot_t b, omsg_t msg)
 	char *buf = MBUF(r->buf);
 	ssize_t nwr;
 
-	/* message massage */
-	switch (msg.typ) {
-	case OMSG_BUY:
-		msg.ord.sid = SIDE_LONG;
-		break;
-	case OMSG_SEL:
-		msg.ord.sid = SIDE_SHORT;
-		break;
-	default:
-		break;
-	}
-
 	/* try and serialise */
 	nwr = send_omsg(buf + r->mbof, MBOFZ - r->mbof, msg);
 	if (UNLIKELY(nwr <= 0)) {
@@ -330,6 +318,7 @@ bot_send(bot_t b)
 	const char *buf = MBUF(r->buf);
 	int rc;
 
+	fwrite(buf, 1, r->mbof, stdout);
 	if (UNLIKELY(!r->mbof)) {
 		return 0;
 	}

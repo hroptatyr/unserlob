@@ -18,8 +18,6 @@ typedef struct {
 		OMSG_NOK,
 		OMSG_OID,
 		/* forth */
-		OMSG_SEL,
-		OMSG_BUY,
 		OMSG_CAN,
 		OMSG_ORD,
 	} typ;

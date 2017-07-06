@@ -488,8 +488,7 @@ data_cb(EV_P_ ev_io *w, int UNUSED(re))
 			continue;
 		}
 		switch (m.typ) {
-		case OMSG_BUY:
-		case OMSG_SEL:
+		case OMSG_ORD:
 			omsg_add_ord(u->w.fd, ins, m.ord, u->uid);
 			break;
 		case OMSG_CAN:
