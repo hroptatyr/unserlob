@@ -318,7 +318,6 @@ bot_send(bot_t b)
 	const char *buf = MBUF(r->buf);
 	int rc;
 
-	fwrite(buf, 1, r->mbof, stdout);
 	if (UNLIKELY(!r->mbof)) {
 		return 0;
 	}
