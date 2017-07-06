@@ -157,7 +157,10 @@ Error: need a target, how about --target=10%?\n", stderr);
 			/* oooh relative they want */
 			trel = tabs;
 			tabs = 0.dd;
-			break;
+			fputs("\
+Error: relative targets not implemented yet, can you code it?\n", stderr);
+			rc = 1;
+			goto out;
 		default:
 		inv:
 			fputs("\
