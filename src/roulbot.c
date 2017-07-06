@@ -23,7 +23,6 @@ static clob_side_t dir = NSIDES;
 static clob_oid_t coid[NSIDES];
 static unxs_exa_t acc = {0.dd, 0.dd};
 static qx_t pnl = 0.dd;
-static px_t mean;
 static px_t tabs;
 static px_t trel;
 
@@ -41,6 +40,8 @@ static void
 ochan_cb(bot_t b, omsg_t m)
 {
 	switch (m.typ) {
+		px_t mean, labs;
+
 	case OMSG_ACC:
 		acc = m.exa;
 		/* cancel any outstanding orders */
@@ -52,12 +53,13 @@ ochan_cb(bot_t b, omsg_t m)
 			goto send;
 		}
 		/* calc mean price otherwise */
-		mean = quantizeqx((pnl - acc.term) / acc.base, acc.term);
+		mean = (px_t)quantizeqx((pnl - acc.term) / acc.base, acc.term);
+		labs = (px_t)quantizeqx(tabs / acc.base, acc.term);
 		/* put bracket order */
 		clob_ord_t tak = {
 			TYPE_LMT, (acc.base < 0.dd),
 			.qty = {acc.base, 0.dd},
-			.lmt = mean + tabs
+			.lmt = mean + labs
 		};
 		clob_ord_t mor = {
 			TYPE_LMT, (acc.base > 0.dd),
@@ -65,7 +67,7 @@ ochan_cb(bot_t b, omsg_t m)
 				copysignqx(fabsqx(acc.base) + 1.dd, acc.base),
 				0.dd
 			},
-			.lmt = mean - tabs
+			.lmt = mean - labs
 		};
 	
 		add_omsg(b, (omsg_t){OMSG_ORD, INS, .ord = tak});
