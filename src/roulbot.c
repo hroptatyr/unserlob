@@ -52,7 +52,7 @@ ochan_cb(bot_t b, omsg_t m)
 			goto send;
 		}
 		/* calc mean price otherwise */
-		mean = (pnl - acc.term) / acc.base;
+		mean = quantizeqx((pnl - acc.term) / acc.base, acc.term);
 		/* put bracket order */
 		clob_ord_t tak = {
 			TYPE_LMT, (acc.base < 0.dd),
