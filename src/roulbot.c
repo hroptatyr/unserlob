@@ -69,12 +69,12 @@ ochan_cb(bot_t b, omsg_t m)
 		const qx_t babs = fabsqx(acc.base);
 		clob_ord_t tak = {
 			TYPE_LMT, (acc.base < 0.dd),
-			.qty = {1.dd, babs - 1.dd},
+			.qty = {Q.dis, babs - Q.dis},
 			.lmt = mean + labs
 		};
 		clob_ord_t mor = {
 			TYPE_LMT, (acc.base > 0.dd),
-			.qty = {1.dd, babs},
+			.qty = {Q.dis, babs + Q.hid},
 			.lmt = mean - labs
 		};
 	
