@@ -54,7 +54,10 @@ ochan_cb(bot_t b, omsg_t m)
 		}
 		/* calc mean price otherwise */
 		mean = (px_t)quantizeqx((pnl - acc.term) / acc.base, acc.term);
-		labs = (px_t)quantizeqx(tabs / acc.base, acc.term);
+		labs = (px_t)quantizeqx((qx_t)tabs / acc.base, acc.term);
+		if (UNLIKELY(labs == 0.dd)) {
+			labs = scalbnd64(1.dd, quantexpd64(acc.term));
+		}
 		/* put bracket order */
 		clob_ord_t tak = {
 			TYPE_LMT, (acc.base < 0.dd),
@@ -164,7 +167,7 @@ Error: invalid specification of target, should be [+/-]P or [+/-]P%\n", stderr);
 
 	b->ochan_cb = ochan_cb;
 	b->timer_cb = hbeat_cb;
-	bot_set_timer(b, 0.0, 2.0);
+	bot_set_timer(b, 0.0, 5.0);
 
 	if (argi->daemonise_flag && daemon(0, 0) < 0) {
 		fputs("\
