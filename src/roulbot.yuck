@@ -1,0 +1,9 @@
+Usage: roulbot [INSTR]
+
+Trading bot that tries a roulette strategy.
+
+  -H, --host=NAME       Connect to NAME.
+  -d, --daemonise       Detach from terminal.
+  -T, --target=X        X can be +P (for additive target) or P% for
+                        relative target.  The sign determines whether
+                        to go long or short.
