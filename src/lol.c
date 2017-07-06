@@ -162,7 +162,7 @@ _recv_exa(const char *msg, size_t UNUSED(msz))
 	if (UNLIKELY(*on++ != '\t')) {
 		goto nil;
 	}
-	r.term = strtoqx(msg, &on);
+	r.term = strtoqx(on, &on);
 	return r;
 nil:
 	return (unxs_exa_t){};
