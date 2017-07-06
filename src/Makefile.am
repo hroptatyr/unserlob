@@ -119,6 +119,17 @@ dasbot_LDFLAGS += $(lol_LIBS)
 dasbot_LDADD = libdfp.a liblol.a
 BUILT_SOURCES += dasbot.yucc
 
+noinst_PROGRAMS += roulbot
+roulbot_SOURCES = roulbot.c roulbot.yuck
+roulbot_CPPFLAGS = $(AM_CPPFLAGS)
+roulbot_CPPFLAGS += $(lol_CFLAGS)
+roulbot_CPPFLAGS += -mkl
+roulbot_LDFLAGS = $(AM_LDFLAGS)
+roulbot_LDFLAGS += $(lol_LIBS)
+roulbot_LDFLAGS += -mkl
+roulbot_LDADD = libdfp.a liblol.a
+BUILT_SOURCES += roulbot.yucc
+
 
 ## version rules
 version.c: version.c.in $(top_builddir)/.version
