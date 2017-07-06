@@ -3,6 +3,7 @@ Usage: egobot [INSTR]
 Trading bot that randomly sends out orders.
 
   -H, --host=NAME       Connect to NAME.
+  -d, --daemonise       Detach from terminal.
   -F, --freq=I          Send orders every I seconds, default: 1.0
   -S, --spread=P        Fix maker spread to P.
   --max=P               Maximum position, default: unlimited.

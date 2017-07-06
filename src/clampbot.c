@@ -59,10 +59,10 @@ qchan_cb(bot_t b, qmsg_t m)
 			return;
 		}
 		/* go long C0/C1-spread */
-		m0.typ = OMSG_BUY;
-		m0.ord = (clob_ord_t){TYPE_MKT, .qty = {q, 0.dd}};
-		m1.typ = OMSG_SEL;
-		m1.ord = (clob_ord_t){TYPE_MKT, .qty = {q, 0.dd}};
+		m0.typ = OMSG_ORD;
+		m0.ord = (clob_ord_t){TYPE_MKT, SIDE_LONG, .qty = {q, 0.dd}};
+		m1.typ = OMSG_ORD;
+		m1.ord = (clob_ord_t){TYPE_MKT, SIDE_SHORT, .qty = {q, 0.dd}};
 	} else if (cquo[0U][SIDE_BID].prc - cquo[1U][SIDE_ASK].prc > dif ||
 		   cquo[0U][SIDE_BID].prc / cquo[1U][SIDE_ASK].prc > quo) {
 		qx_t q = min(Q, min(cquo[0U][SIDE_BID].new, cquo[1U][SIDE_ASK].new));
@@ -71,10 +71,10 @@ qchan_cb(bot_t b, qmsg_t m)
 			return;
 		}
 		/* go short C0/C1-spread */
-		m0.typ = OMSG_SEL;
-		m0.ord = (clob_ord_t){TYPE_MKT, .qty = {q, 0.dd}};
-		m1.typ = OMSG_BUY;
-		m1.ord = (clob_ord_t){TYPE_MKT, .qty = {q, 0.dd}};
+		m0.typ = OMSG_ORD;
+		m0.ord = (clob_ord_t){TYPE_MKT, SIDE_SHORT, .qty = {q, 0.dd}};
+		m1.typ = OMSG_ORD;
+		m1.ord = (clob_ord_t){TYPE_MKT, SIDE_LONG, .qty = {q, 0.dd}};
 	} else {
 		/* nope, no opportunities today */
 		return;

@@ -240,12 +240,12 @@ hbeat_cb(bot_t b)
 		quo = mm(0);
 	}
 
-	add_omsg(b, (omsg_t){OMSG_BUY, INS,
-				 .ord = (clob_ord_t){TYPE_LMT,
+	add_omsg(b, (omsg_t){OMSG_ORD, INS,
+				 .ord = (clob_ord_t){TYPE_LMT, SIDE_LONG,
 						     .qty = {quo_size, 0.dd},
 						     .lmt = quo.b}});
-	add_omsg(b, (omsg_t){OMSG_SEL, INS,
-				 .ord = (clob_ord_t){TYPE_LMT,
+	add_omsg(b, (omsg_t){OMSG_ORD, INS,
+				 .ord = (clob_ord_t){TYPE_LMT, SIDE_SHORT,
 						     .qty = {quo_size, 0.dd},
 						     .lmt = quo.a}});
 	bot_send(b);

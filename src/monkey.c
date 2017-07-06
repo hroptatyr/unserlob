@@ -34,21 +34,22 @@ hbeat_cb(bot_t b)
 /* generate a random trade */
 	unsigned int x = pcg32_random();
 	qx_t q = 0.dd;
-	omsg_t m = {INS};
+	omsg_t m = {OMSG_ORD, INS};
+	clob_side_t s;
 
 	for (size_t i = 0U; i < 5U; i++, x >>= 1U) {
 		q += x & 0b1U ? 100.dd : -100.dd;
 	}
 	if (q > 0.dd) {
-		m.typ = OMSG_BUY;
+		s = SIDE_LONG;
 	} else if (q < 0.dd) {
-		m.typ = OMSG_SEL;
+		s = SIDE_SHORT;
 		q = -q;
 	} else {
 		/* not today then */
 		return;
 	}
-	m.ord = (clob_ord_t){TYPE_MKT, .qty = {q, 0.dd}};
+	m.ord = (clob_ord_t){TYPE_MKT, s, .qty = {q, 0.dd}};
 	add_omsg(b, m);
 	bot_send(b);
 	return;

@@ -162,7 +162,7 @@ _recv_exa(const char *msg, size_t UNUSED(msz))
 	if (UNLIKELY(*on++ != '\t')) {
 		goto nil;
 	}
-	r.term = strtoqx(msg, &on);
+	r.term = strtoqx(on, &on);
 	return r;
 nil:
 	return (unxs_exa_t){};
@@ -263,7 +263,7 @@ send_omsg(char *restrict buf, size_t bsz, omsg_t msg)
 {
 	/* must be the same order as omsg enum */
 	static const char typ[] = "\
-UNK\tACC\tFIL\tKIL\tNOK\tOID\tBUY\tSEL\tCAN\tORD\t";
+UNK\tACC\tFIL\tKIL\tNOK\tOID\tCAN\tORD\t";
 	size_t len = 0U;
 
 	len += (memcpy(buf, typ + 4U * msg.typ, 4U), 4U);
@@ -271,14 +271,14 @@ UNK\tACC\tFIL\tKIL\tNOK\tOID\tBUY\tSEL\tCAN\tORD\t";
 	buf[len++] = '\t';
 
 	switch (msg.typ) {
-	case OMSG_BUY:
-		return len + _send_ord(buf + len, bsz - len, msg.ord);
-	case OMSG_SEL:
+		static const char sid[] = "\
+SEL\tBUY\t";
+
+	case OMSG_ORD:
+		memcpy(buf, sid + 4U * msg.ord.sid, 4U);
 		return len + _send_ord(buf + len, bsz - len, msg.ord);
 	case OMSG_CAN:
 		return len + _send_oid(buf + len, bsz - len, msg.oid);
-	case OMSG_ORD:
-		return len + _send_ord(buf + len, bsz - len, msg.ord);
 
 	case OMSG_ACC:
 		return len + _send_exa(buf + len, bsz - len, msg.exa);
@@ -331,10 +331,10 @@ recv_omsg(const char *msg, size_t msz)
 		return (omsg_t){OMSG_NOK, .ins = ins, .inz = eoi - ins,
 				.oid = _recv_oid(eoi + 1U, msz - 1U)};
 	} else if (!memcmp(msg, "BUY\t", 4U)) {
-		return (omsg_t){OMSG_BUY, .ins = ins, .inz = eoi - ins,
+		return (omsg_t){OMSG_ORD, .ins = ins, .inz = eoi - ins,
 				.ord = _recv_ord(msg, eoi + 1U, msz - 1U)};
 	} else if (!memcmp(msg, "SEL\t", 4U)) {
-		return (omsg_t){OMSG_SEL, .ins = ins, .inz = eoi - ins,
+		return (omsg_t){OMSG_ORD, .ins = ins, .inz = eoi - ins,
 				.ord = _recv_ord(msg, eoi + 1U, msz - 1U)};
 	} else if (!memcmp(msg, "CAN\t", 4U)) {
 		return (omsg_t){OMSG_CAN, .ins = ins, .inz = eoi - ins,
