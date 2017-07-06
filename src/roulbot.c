@@ -47,29 +47,33 @@ ochan_cb(bot_t b, omsg_t m)
 		/* cancel any outstanding orders */
 		add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[SIDE_BID]});
 		add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[SIDE_ASK]});
+
 		/* store pnl if we're flat */
 		if (acc.base == 0.dd) {
 			pnl = acc.term;
 			goto send;
 		}
+
 		/* calc mean price otherwise */
 		mean = (px_t)quantizeqx((pnl - acc.term) / acc.base, acc.term);
+#if 0
+/* contract size */
 		labs = (px_t)quantizeqx((qx_t)tabs / acc.base, acc.term);
 		if (UNLIKELY(labs == 0.dd)) {
 			labs = scalbnd64(1.dd, quantexpd64(acc.term));
 		}
+#else
+		labs = copysignd64(tabs, acc.base);
+#endif
 		/* put bracket order */
 		clob_ord_t tak = {
 			TYPE_LMT, (acc.base < 0.dd),
-			.qty = {acc.base, 0.dd},
+			.qty = {fabsd64(acc.base), 0.dd},
 			.lmt = mean + labs
 		};
 		clob_ord_t mor = {
 			TYPE_LMT, (acc.base > 0.dd),
-			.qty = {
-				copysignqx(fabsqx(acc.base) + 1.dd, acc.base),
-				0.dd
-			},
+			.qty = {fabsqx(acc.base) + 1.dd, 0.dd},
 			.lmt = mean - labs
 		};
 	
@@ -141,6 +145,8 @@ Error: need a target, how about --target=10%?\n", stderr);
 		} else {
 			goto inv;
 		}
+		/* make us absolute */
+		tabs = fabsd64(tabs);
 
 		switch (*on) {
 		case '\0':
