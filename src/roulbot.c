@@ -17,7 +17,7 @@
 #define copysignpx	copysignd64
 #define copysignqx	copysignd64
 
-static qx_t Q = 1.dd;
+static qty_t Q = {1.dd, 0.dd};
 static clob_side_t dir = NSIDES;
 
 static clob_oid_t coid[NSIDES];
@@ -66,14 +66,15 @@ ochan_cb(bot_t b, omsg_t m)
 		labs = copysignd64(tabs, acc.base);
 #endif
 		/* put bracket order */
+		const qx_t babs = fabsqx(acc.base);
 		clob_ord_t tak = {
 			TYPE_LMT, (acc.base < 0.dd),
-			.qty = {fabsd64(acc.base), 0.dd},
+			.qty = {1.dd, babs - 1.dd},
 			.lmt = mean + labs
 		};
 		clob_ord_t mor = {
 			TYPE_LMT, (acc.base > 0.dd),
-			.qty = {fabsqx(acc.base) + 1.dd, 0.dd},
+			.qty = {1.dd, babs},
 			.lmt = mean - labs
 		};
 	
@@ -98,7 +99,7 @@ hbeat_cb(bot_t b)
 		/* there should be a bracket out there already */
 		return;
 	}
-	add_omsg(b, (omsg_t){OMSG_ORD, INS, .ord = {TYPE_MKT, dir, {Q, 0.dd}}});
+	add_omsg(b, (omsg_t){OMSG_ORD, INS, .ord = {TYPE_MKT, dir, Q}});
 	bot_send(b);
 	return;
 }
@@ -163,6 +164,16 @@ Error: need a target, how about --target=10%?\n", stderr);
 Error: invalid specification of target, should be [+/-]P or [+/-]P%\n", stderr);
 			rc = 1;
 			goto out;
+		}
+	}
+
+	if (argi->qty_arg) {
+		char *on;
+		Q.dis = strtoqx(argi->qty_arg, &on);
+		if (*on++ == '+') {
+			Q.hid = strtoqx(on, NULL);
+		} else {
+			Q.hid = 0.dd;
 		}
 	}
 
