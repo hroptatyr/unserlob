@@ -130,6 +130,17 @@ roulbot_LDFLAGS += -mkl
 roulbot_LDADD = libdfp.a liblol.a
 BUILT_SOURCES += roulbot.yucc
 
+noinst_PROGRAMS += pyrabot
+pyrabot_SOURCES = pyrabot.c pyrabot.yuck
+pyrabot_CPPFLAGS = $(AM_CPPFLAGS)
+pyrabot_CPPFLAGS += $(lol_CFLAGS)
+pyrabot_CPPFLAGS += -mkl
+pyrabot_LDFLAGS = $(AM_LDFLAGS)
+pyrabot_LDFLAGS += $(lol_LIBS)
+pyrabot_LDFLAGS += -mkl
+pyrabot_LDADD = libdfp.a liblol.a
+BUILT_SOURCES += pyrabot.yucc
+
 
 ## version rules
 version.c: version.c.in $(top_builddir)/.version
