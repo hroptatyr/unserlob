@@ -323,7 +323,7 @@ recv_omsg(const char *msg, size_t msz)
 	} else if (!memcmp(msg, "FIL\t", 4U)) {
 		struct fil_s f = _recv_fil(eoi + 1U, msz - 1U);
 		return (omsg_t){OMSG_FIL, .ins = ins, .inz = eoi - ins,
-				.exe = f.exe, .con = f.con};
+				.fid = f.fid, .exe = f.exe, .con = f.con};
 	} else if (!memcmp(msg, "KIL\t", 4U)) {
 		return (omsg_t){OMSG_KIL, .ins = ins, .inz = eoi - ins,
 				.oid = _recv_oid(eoi + 1U, msz - 1U)};
