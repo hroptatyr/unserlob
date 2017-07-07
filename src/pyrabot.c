@@ -50,12 +50,13 @@ struct vwap_s {
 
 static size_t nlvl = 1U;
 static qty_t Q = {500.dd, 500.dd};
-/* best-belief price */
-static px_t bb;
-/* best-(half-)spread per unit of quantity */
-static px_t bs = 0.0001dd;
 /* min tick */
 static px_t mint = 0.01dd;
+static px_t mins;
+/* best-belief price */
+static px_t bb = 0.dd;
+/* best-(half-)spread per unit of quantity */
+static px_t bs;
 /* total posted quantity */
 static qx_t totq;
 
@@ -105,6 +106,7 @@ hbeat_cb(bot_t b)
 			bb = vwap;
 		}
 	}
+#if 0
 	/* update spread,
 	 * we determine the quantitiy taken off the book relative to
 	 * the posted quantity.  50% taking shall mean the spread
@@ -113,6 +115,18 @@ hbeat_cb(bot_t b)
 	with (qx_t clrd = vsum.vqty / totq) {
 		bs *= pow(2., 2. * (double)clrd - 1.);
 	}
+#else
+	/* update spread
+	 * alternative with exponential back-off
+	 * double the spread as soon as there's trades, halve it
+	 * when there's not */
+	(void)totq;
+	if (vsum.vqty > 0.dd) {
+		bs *= 4.dd;
+	} else {
+		bs = max(bs / 2.dd, mins);
+	}
+#endif
 
 	/* reset oid counter, we'll emit new orders */
 	noid = 0U;
@@ -188,6 +202,8 @@ Error: argument to levels must be positive.\n", stderr);
 	/* prep coids */
 	coid = calloc(NSIDES * nlvl, sizeof(*coid));
 	totq = (qx_t)nlvl * qty(Q) * (qx_t)NSIDES;
+	mins = (qx_t)mint / qty(Q) / 2.dd;
+	bs = mint;
 
 	/* initialise the bot */
 	if (UNLIKELY((b = make_bot(host)) == NULL)) {
