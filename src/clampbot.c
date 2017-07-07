@@ -149,11 +149,19 @@ Error: need a difference or quotient spread.\n", stderr);
 		goto out;
 	}
 
+	if (argi->daemonise_flag && daemon(0, 0) < 0) {
+		fputs("\
+Error: cannot run in daemon mode\n", stderr);
+		rc = 1;
+		goto kil;
+	}
+
 	b->qchan_cb = qchan_cb;
 
 	/* go go go */
 	rc = run_bots(b) < 0;
 
+kil:
 	kill_bot(b);
 
 out:
