@@ -1,0 +1,9 @@
+Usage: pyrabot [INSTR]
+
+Trading bot that uses order flow to guesstimate mid point.
+
+  -H, --host=NAME       Connect to NAME.
+  -d, --daemonise       Detach from terminal.
+  -Q, --qty=Q[+H]       Post a quantity of Q (and H hidden),
+                        default: 500+500
+  -N, --levels=N        Post liquidity on N levels, default: 1.
