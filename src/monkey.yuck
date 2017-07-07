@@ -3,4 +3,5 @@ Usage: monkey [INSTR]
 Trading bot that randomly sends out orders.
 
   -H, --host=NAME       Connect to NAME.
+  -d, --daemonise       Detach from terminal.
   -F, --freq=I          Send order every I seconds, default 1.0
