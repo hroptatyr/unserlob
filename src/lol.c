@@ -231,6 +231,23 @@ _recv_auc(const char *msg, size_t UNUSED(msz))
 	if (*on++ != '\t') {
 		goto nil;
 	}
+	r.qty = strtoqx(on, &on);
+	r.imb = 0.dd;
+	return r;
+nil:
+	return (mmod_auc_t){NANPX, 0.dd, 0.dd};
+}
+
+static mmod_auc_t
+_recv_imb(const char *msg, size_t UNUSED(msz))
+{
+	mmod_auc_t r;
+	char *on;
+
+	r.prc = strtopx(msg, &on);
+	if (*on++ != '\t') {
+		goto nil;
+	}
 	r.imb = strtoqx(on, &on);
 	r.qty = 0.dd;
 	return r;
@@ -377,6 +394,15 @@ send_qmsg(char *restrict buf, size_t bsz, qmsg_t msg)
 		buf[len++] = '\t';
 		len += pxtostr(buf + len, bsz - len, msg.auc.prc);
 		buf[len++] = '\t';
+		len += qxtostr(buf + len, bsz - len, msg.auc.qty);
+		buf[len++] = '\n';
+		break;
+	case QMSG_IMB:
+		len = (memcpy(buf + len, "IMB\t", 4U), 4U);
+		len += (memcpy(buf + len, msg.ins, msg.inz), msg.inz);
+		buf[len++] = '\t';
+		len += pxtostr(buf + len, bsz - len, msg.auc.prc);
+		buf[len++] = '\t';
 		len += qxtostr(buf + len, bsz - len, msg.auc.imb);
 		buf[len++] = '\n';
 		break;
@@ -418,6 +444,20 @@ recv_qmsg(const char *msg, size_t msz)
 			break;
 		}
 		break;
+	case 'I':
+		if (memcmp(msg, "IMB\t", 4U)) {
+			break;
+		}
+		/* snarf instrument */
+		ins = msg + 4U;
+		eoi = memchr(msg + 4U, '\t', msz - 4U);
+		msz -= eoi - msg;
+		if (UNLIKELY(eoi == NULL)) {
+			break;
+		}
+		return (qmsg_t){QMSG_IMB, ins, eoi - ins,
+				.auc = _recv_imb(eoi + 1U, msz - 1U)};
+		
 	case 'T':
 		if (memcmp(msg, "TRA\t", 4U)) {
 			break;

@@ -42,6 +42,7 @@ typedef struct {
 		QMSG_LVL,
 		QMSG_TRA,
 		QMSG_AUC,
+		QMSG_IMB,
 	} typ;
 	const char *ins;
 	const size_t inz;
