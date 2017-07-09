@@ -181,7 +181,7 @@ qchan_cb(bot_t b, qmsg_t m)
 		 * currently no way to obtain it from the auctioning
 		 * exchange and the user should not be trusted with
 		 * having to specify critical information like this */
-		if (!(cauc++ % (2 * nauc))) {
+		if (!(cauc++ % nauc)) {
 			hbeat_cb(b);
 		}
 		break;

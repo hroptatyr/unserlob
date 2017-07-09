@@ -353,6 +353,13 @@ diss_auc(mmod_auc_t a, size_t ins)
 	return;
 }
 
+static void
+diss_imb(mmod_auc_t a, size_t ins)
+{
+	SEND_QMSG(quot_chan, QMSG_IMB, INS(ins), .auc = a);
+	return;
+}
+
 
 #define ZCLO	(4096U)
 #define UBSZ	(ZCLO - offsetof(struct uclo_s, buf))
@@ -463,10 +470,10 @@ hbeat_cb(EV_P_ ev_timer *UNUSED(w), int UNUSED(revents))
 /* perform auction on even ticks */
 	static unsigned int n;
 
-	if (n++ % 2U) {
+	if (n++ % 4U) {
 		for (size_t i = 0U; i < NINSTR; i++) {
 			mmod_auc_t auc = mmod_auction(clob[i]);
-			diss_auc(auc, i);
+			diss_imb(auc, i);
 		}
 		return;
 	}
@@ -474,6 +481,7 @@ hbeat_cb(EV_P_ ev_timer *UNUSED(w), int UNUSED(revents))
 	for (size_t i = 0U; i < NINSTR; i++) {
 		mmod_auc_t auc = mmod_auction(clob[i]);
 		unxs_auction(clob[i], auc.prc, auc.qty);
+		diss_auc(auc, i);
 	}
 	for (size_t i = 0U; i < NINSTR; i++) {
 		diss_exe(clob[i].exe, i);
