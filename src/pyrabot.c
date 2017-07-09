@@ -64,6 +64,7 @@ static clob_oid_t *coid;
 static size_t noid;
 
 static struct vwap_s vsum;
+static size_t nauc;
 
 static const char *cont;
 static size_t conz;
@@ -167,6 +168,27 @@ hbeat_cb(bot_t b)
 	return;
 }
 
+static void
+qchan_cb(bot_t b, qmsg_t m)
+{
+	static size_t cauc;
+
+	switch (m.typ) {
+	case QMSG_AUC:
+		/* at least cabot sends out 2 AUCs per auction,
+		 * once the preliminary price and once the final price
+		 * we secretly use this knowledge here as there is
+		 * currently no way to obtain it from the auctioning
+		 * exchange and the user should not be trusted with
+		 * having to specify critical information like this */
+		if (!(cauc++ % (2 * nauc))) {
+			hbeat_cb(b);
+		}
+		break;
+	}
+	return;
+}
+
 
 #include "pyrabot.yucc"
 
@@ -203,6 +225,17 @@ main(int argc, char *argv[])
 		}
 	}
 
+	if (argi->auction_arg) {
+		if (argi->auction_arg == YUCK_OPTARG_NONE) {
+			nauc = 1U;
+		} else if (!(nauc = strtoul(argi->auction_arg, NULL, 10))) {
+			fputs("\
+Error: argument to auction must be positive.\n", stderr);
+			rc = 1;
+			goto out;
+		}
+	}
+
 	if (argi->levels_arg) {
 		if (!(nlvl = strtoul(argi->levels_arg, NULL, 10))) {
 			fputs("\
@@ -222,9 +255,12 @@ Error: argument to levels must be positive.\n", stderr);
 		goto out;
 	}
 
-	b->timer_cb = hbeat_cb;
-	bot_set_timer(b, 0.0, freq);
-
+	if (!nauc) {
+		b->timer_cb = hbeat_cb;
+		bot_set_timer(b, 0.0, freq);
+	} else {
+		b->qchan_cb = qchan_cb;
+	}
 	b->ochan_cb = ochan_cb;
 
 	if (argi->daemonise_flag && daemon(0, 0) < 0) {
