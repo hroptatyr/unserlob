@@ -481,6 +481,7 @@ hbeat_cb(EV_P_ ev_timer *UNUSED(w), int UNUSED(revents))
 	for (size_t i = 0U; i < NINSTR; i++) {
 		mmod_auc_t auc = mmod_auction(clob[i]);
 		unxs_auction(clob[i], auc.prc, auc.qty);
+		diss_auc(auc, i);
 	}
 	for (size_t i = 0U; i < NINSTR; i++) {
 		diss_exe(clob[i].exe, i);
