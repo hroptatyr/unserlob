@@ -7,3 +7,6 @@ Trading bot that uses order flow to guesstimate mid point.
   -Q, --qty=Q[+H]       Post a quantity of Q (and H hidden),
                         default: 500+500
   -N, --levels=N        Post liquidity on N levels, default: 1.
+  --auction[=N]         Synchronise with an auctioning market.
+                        N = 1 every auction, 2 every second
+                        auction, etc. default: 1

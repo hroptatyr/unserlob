@@ -45,7 +45,7 @@
 
 struct vwap_s {
 	qx_t vprc;
-	qx_t vqty;
+	qx_t vqty[NSIDES];
 };
 
 static size_t nlvl = 1U;
@@ -63,7 +63,8 @@ static qx_t totq;
 static clob_oid_t *coid;
 static size_t noid;
 
-static struct vwap_s vsum = {0.dd, 0.dd};
+static struct vwap_s vsum;
+static size_t nauc;
 
 static const char *cont;
 static size_t conz;
@@ -79,7 +80,7 @@ ochan_cb(bot_t UNUSED(b), omsg_t m)
 		break;
 	case OMSG_FIL:
 		vsum.vprc += (qx_t)m.exe.prc * m.exe.qty;
-		vsum.vqty += m.exe.qty;
+		vsum.vqty[m.fid.sid] += m.exe.qty;
 		break;
 	case OMSG_ACC:
 		break;
@@ -101,7 +102,7 @@ hbeat_cb(bot_t b)
 	}
 
 	/* update mid point */
-	with (px_t vwap = (px_t)(vsum.vprc / vsum.vqty)) {
+	with (px_t vwap = (px_t)(vsum.vprc / (vsum.vqty[0U] + vsum.vqty[1U]))) {
 		if (!isnanpx(vwap)) {
 			bb = vwap;
 		}
@@ -112,19 +113,31 @@ hbeat_cb(bot_t b)
 	 * the posted quantity.  50% taking shall mean the spread
 	 * stays the same.  0% taking means the spread halves and
 	 * 100% means the spread doubles, i.e. new spread = 2^(2 * clr - 1) */
-	with (qx_t clrd = vsum.vqty / totq) {
+	with (qx_t clrd = (vsum.vqty[0U] + vsum.vqty[1U]) / totq) {
 		bs *= pow(2., 2. * (double)clrd - 1.);
 	}
-#else
+#elif 0
 	/* update spread
 	 * alternative with exponential back-off
 	 * double the spread as soon as there's trades, halve it
 	 * when there's not */
-	(void)totq;
-	if (vsum.vqty > 0.dd) {
+	if (vsum.vqty[0U] + vsum.vqty[1U] > 0.dd) {
 		bs *= 4.dd;
 	} else {
 		bs = max(bs / 2.dd, mins);
+	}
+#else
+	/* update spread
+	 * when level n has been touched (but not cleared) use the
+	 * spread of level n, when it has been cleared use n+1 */
+	with (qx_t maxvqty = max(vsum.vqty[0U], vsum.vqty[1U])) {
+		if (maxvqty == 0.dd) {
+			bs = max(bs / 2.dd, mins);
+		} else {
+			qx_t lvl = ceild64((maxvqty + 1.dd) / qty(Q));
+
+			bs *= lvl;
+		}
 	}
 #endif
 
@@ -151,7 +164,28 @@ hbeat_cb(bot_t b)
 		bot_send(b);
 	}
 	/* reset vsum counter */
-	vsum = (struct vwap_s){0.dd, 0.dd};
+	vsum = (struct vwap_s){0.dd, 0.dd, 0.dd};
+	return;
+}
+
+static void
+qchan_cb(bot_t b, qmsg_t m)
+{
+	static size_t cauc;
+
+	switch (m.typ) {
+	case QMSG_AUC:
+		/* at least cabot sends out 2 AUCs per auction,
+		 * once the preliminary price and once the final price
+		 * we secretly use this knowledge here as there is
+		 * currently no way to obtain it from the auctioning
+		 * exchange and the user should not be trusted with
+		 * having to specify critical information like this */
+		if (!(cauc++ % (2 * nauc))) {
+			hbeat_cb(b);
+		}
+		break;
+	}
 	return;
 }
 
@@ -191,6 +225,17 @@ main(int argc, char *argv[])
 		}
 	}
 
+	if (argi->auction_arg) {
+		if (argi->auction_arg == YUCK_OPTARG_NONE) {
+			nauc = 1U;
+		} else if (!(nauc = strtoul(argi->auction_arg, NULL, 10))) {
+			fputs("\
+Error: argument to auction must be positive.\n", stderr);
+			rc = 1;
+			goto out;
+		}
+	}
+
 	if (argi->levels_arg) {
 		if (!(nlvl = strtoul(argi->levels_arg, NULL, 10))) {
 			fputs("\
@@ -202,7 +247,7 @@ Error: argument to levels must be positive.\n", stderr);
 	/* prep coids */
 	coid = calloc(NSIDES * nlvl, sizeof(*coid));
 	totq = (qx_t)nlvl * qty(Q) * (qx_t)NSIDES;
-	mins = (qx_t)mint / qty(Q) / 2.dd;
+	mins = (qx_t)mint / qty(Q);
 	bs = mint;
 
 	/* initialise the bot */
@@ -210,9 +255,12 @@ Error: argument to levels must be positive.\n", stderr);
 		goto out;
 	}
 
-	b->timer_cb = hbeat_cb;
-	bot_set_timer(b, 0.0, freq);
-
+	if (!nauc) {
+		b->timer_cb = hbeat_cb;
+		bot_set_timer(b, 0.0, freq);
+	} else {
+		b->qchan_cb = qchan_cb;
+	}
 	b->ochan_cb = ochan_cb;
 
 	if (argi->daemonise_flag && daemon(0, 0) < 0) {
