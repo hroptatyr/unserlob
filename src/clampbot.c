@@ -43,7 +43,21 @@ qchan_cb(bot_t b, qmsg_t m)
 			cquo[1U][m.quo.sid] = m.quo;
 			break;
 		}
-		/* fallthrough */
+		return;
+	case QMSG_AUC:
+		if (isnanpx(m.quo.prc)) {
+			/* don't track NANs */
+			break;
+		} else if (!memcmp(m.ins, cont[0U], conz[0U])) {
+			quos_msg_t q = {NSIDES, m.auc.prc, m.auc.qty};
+			cquo[0U][SIDE_ASK] = cquo[0U][SIDE_BID] = q;
+			break;
+		} else if (!memcmp(m.ins, cont[1U], conz[1U])) {
+			quos_msg_t q = {NSIDES, m.auc.prc, m.auc.qty};
+			cquo[1U][SIDE_ASK] = cquo[1U][SIDE_BID] = q;
+			break;
+		}
+		return;
 	default:
 		return;
 	}
