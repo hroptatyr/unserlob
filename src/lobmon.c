@@ -71,6 +71,7 @@ nettostr(char *restrict buf, size_t bsz, const struct sockaddr_in6 *a)
 static void
 sigint_cb(EV_P_ ev_signal *UNUSED(w), int UNUSED(revents))
 {
+	fsync(STDOUT_FILENO);
 	ev_unloop(EV_A_ EVUNLOOP_ALL);
 	return;
 }
