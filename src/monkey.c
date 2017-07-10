@@ -128,7 +128,7 @@ Error: cannot run in daemon mode\n", stderr);
 	}
 
 	b->timer_cb = hbeat_cb;
-	bot_set_timer(b, 0., freq);
+	bot_set_timer(b, freq, freq);
 
 	/* go go go */
 	rc = run_bots(b) < 0;
