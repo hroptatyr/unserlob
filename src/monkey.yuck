@@ -5,3 +5,5 @@ Trading bot that randomly sends out orders.
   -H, --host=NAME       Connect to NAME.
   -d, --daemonise       Detach from terminal.
   -F, --freq=I          Send order every I seconds, default 1.0
+  -Q, --qty=Q           Base quantity for each summand, default: 100 
+  -N, --summands=N      Post the sum of N random drawings, default: 5

@@ -10,6 +10,14 @@
 #include "bot.h"
 #include "nifty.h"
 
+#define strtoqx		strtod64
+#define strtopx		strtod64
+#define qxtostr		d64tostr
+#define pxtostr		d64tostr
+
+static qx_t basq = 100.dd;
+static size_t N = 5U;
+
 static const char *cont;
 static size_t conz;
 #define INS		.ins = cont, .inz = conz
@@ -32,13 +40,15 @@ static void
 hbeat_cb(bot_t b)
 {
 /* generate a random trade */
-	unsigned int x = pcg32_random();
 	qx_t q = 0.dd;
 	omsg_t m = {OMSG_ORD, INS};
 	clob_side_t s;
 
-	for (size_t i = 0U; i < 5U; i++, x >>= 1U) {
-		q += x & 0b1U ? 100.dd : -100.dd;
+	for (size_t i = 0U; i < N; i += 32U) {
+		unsigned int x = pcg32_random();
+		for (size_t j = i, l = min(32U, N); j < l; j++, x >>= 1U) {
+			q += x & 0b1U ? basq : -basq;
+		}
 	}
 	if (q > 0.dd) {
 		s = SIDE_LONG;
@@ -83,6 +93,24 @@ main(int argc, char *argv[])
 
 	if (argi->freq_arg) {
 		freq = strtod(argi->freq_arg, NULL);
+	}
+
+	if (argi->summands_arg) {
+		if (!(N = strtoul(argi->summands_arg, NULL, 0))) {
+			fputs("\
+Error: argument to summands must be positive.\n", stderr);
+			rc = 1;
+			goto out;
+		}
+	}
+
+	if (argi->qty_arg) {
+		if ((basq = strtoqx(argi->qty_arg, NULL)) <= 0.dd) {
+			fputs("\
+Error: argument to qty must be positive.\n", stderr);
+			rc = 1;
+			goto out;
+		}
 	}
 
 	init_rng(0ULL);
