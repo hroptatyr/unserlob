@@ -287,6 +287,16 @@ chck_book(void)
 			btree_iter_t bi = {clob[j].lmt[SIDE_BID]};
 			assert(!btree_iter_next(&bi));
 		}
+		for (btree_iter_t ai = {clob[j].lmt[SIDE_ASK]};
+		     btree_iter_next(&ai);) {
+			assert(ai.v->sum.dis >= 0.dd);
+			assert(ai.v->sum.hid >= 0.dd);
+		}
+		for (btree_iter_t bi = {clob[j].lmt[SIDE_BID]};
+		     btree_iter_next(&bi);) {
+			assert(bi.v->sum.dis >= 0.dd);
+			assert(bi.v->sum.hid >= 0.dd);
+		}
 	}
 	return;
 }
