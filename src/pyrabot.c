@@ -78,19 +78,20 @@ _maxq(qty_t q, qty_t sum, qx_t lim)
 {
 /* Q is the quantity we'd like to post
  * SUM is how much we posted so far
- * LIM is the maximum postable quantity */
-	if (LIKELY(qty(qty_add(q, sum)) <= lim)) {
-		/* just post it */
-		return q;
-	} else if (LIKELY(qty(sum) >= lim)) {
-		return qty0;
+ * LIM is the maximum postable quantity, can be NAN */
+	if (qty(qty_add(q, sum)) > lim) {
+		if (LIKELY(qty(sum) >= lim)) {
+			return qty0;
+		}
+		/* otherwise Q = LIM - SUM mimicking qty_exe() */
+		qx_t x = lim - qty(sum);
+		if (x > q.dis) {
+			return (qty_t){q.dis, q.hid - x};
+		}
+		return (qty_t){x, 0.dd};
 	}
-	/* otherwise Q = LIM - SUM mimicking qty_exe() */
-	qx_t x = lim - qty(sum);
-	if (x > q.dis) {
-		return (qty_t){q.dis, q.hid - x};
-	}
-	return (qty_t){x, 0.dd};
+	/* otherwise just post it */
+	return q;
 }
 
 
