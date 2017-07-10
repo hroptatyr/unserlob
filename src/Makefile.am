@@ -7,7 +7,7 @@ AM_CPPFLAGS += -D_HAVE_VERSION_H
 AM_LDFLAGS = $(XCCLDFLAGS)
 
 bin_PROGRAMS =
-noinst_PROGRAMS =
+pkglibexec_PROGRAMS =
 noinst_LIBRARIES =
 noinst_HEADERS =
 BUILT_SOURCES =
@@ -78,7 +78,7 @@ cabot_LDFLAGS += $(dfp754_LIBS)
 cabot_LDADD = libdfp.a liblol.a
 BUILT_SOURCES += cabot.yucc
 
-noinst_PROGRAMS += monkey
+pkglibexec_PROGRAMS += monkey
 monkey_SOURCES = monkey.c monkey.yuck
 monkey_SOURCES += pcg_basic.c pcg_basic.h
 monkey_CPPFLAGS = $(AM_CPPFLAGS)
@@ -88,7 +88,7 @@ monkey_LDFLAGS += $(lol_LIBS)
 monkey_LDADD = libdfp.a liblol.a
 BUILT_SOURCES += monkey.yucc
 
-noinst_PROGRAMS += egobot
+pkglibexec_PROGRAMS += egobot
 egobot_SOURCES = egobot.c egobot.yuck
 egobot_CPPFLAGS = $(AM_CPPFLAGS)
 egobot_CPPFLAGS += $(lol_CFLAGS)
@@ -99,7 +99,7 @@ egobot_LDFLAGS += -mkl
 egobot_LDADD = libdfp.a liblol.a
 BUILT_SOURCES += egobot.yucc
 
-noinst_PROGRAMS += clampbot
+pkglibexec_PROGRAMS += clampbot
 clampbot_SOURCES = clampbot.c clampbot.yuck
 clampbot_CPPFLAGS = $(AM_CPPFLAGS)
 clampbot_CPPFLAGS += $(lol_CFLAGS)
@@ -109,7 +109,7 @@ clampbot_LDFLAGS += $(lol_LIBS)
 clampbot_LDADD = libdfp.a liblol.a
 BUILT_SOURCES += clampbot.yucc
 
-noinst_PROGRAMS += dasbot
+pkglibexec_PROGRAMS += dasbot
 dasbot_SOURCES = dasbot.c dasbot.yuck
 dasbot_CPPFLAGS = $(AM_CPPFLAGS)
 dasbot_CPPFLAGS += $(lol_CFLAGS)
@@ -119,7 +119,7 @@ dasbot_LDFLAGS += $(lol_LIBS)
 dasbot_LDADD = libdfp.a liblol.a
 BUILT_SOURCES += dasbot.yucc
 
-noinst_PROGRAMS += roulbot
+pkglibexec_PROGRAMS += roulbot
 roulbot_SOURCES = roulbot.c roulbot.yuck
 roulbot_CPPFLAGS = $(AM_CPPFLAGS)
 roulbot_CPPFLAGS += $(lol_CFLAGS)
@@ -130,7 +130,7 @@ roulbot_LDFLAGS += -mkl
 roulbot_LDADD = libdfp.a liblol.a
 BUILT_SOURCES += roulbot.yucc
 
-noinst_PROGRAMS += pyrabot
+pkglibexec_PROGRAMS += pyrabot
 pyrabot_SOURCES = pyrabot.c pyrabot.yuck
 pyrabot_CPPFLAGS = $(AM_CPPFLAGS)
 pyrabot_CPPFLAGS += $(lol_CFLAGS)
