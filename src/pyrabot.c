@@ -50,6 +50,7 @@ struct vwap_s {
 
 static size_t nlvl = 1U;
 static qty_t Q = {500.dd, 500.dd};
+static qx_t maxq;
 /* min tick */
 static px_t mint = 0.01dd;
 static px_t mins;
@@ -59,6 +60,7 @@ static px_t bb = 0.dd;
 static px_t bs;
 /* total posted quantity */
 static qx_t totq;
+static unxs_exa_t acc = {0.dd, 0.dd};
 
 static clob_oid_t *coid;
 static size_t noid;
@@ -69,6 +71,27 @@ static size_t nauc;
 static const char *cont;
 static size_t conz;
 #define INS		.ins = cont, .inz = conz
+
+
+static inline qty_t
+_maxq(qty_t q, qty_t sum, qx_t lim)
+{
+/* Q is the quantity we'd like to post
+ * SUM is how much we posted so far
+ * LIM is the maximum postable quantity */
+	if (LIKELY(qty(qty_add(q, sum)) <= lim)) {
+		/* just post it */
+		return q;
+	} else if (LIKELY(qty(sum) >= lim)) {
+		return qty0;
+	}
+	/* otherwise Q = LIM - SUM mimicking qty_exe() */
+	qx_t x = lim - qty(sum);
+	if (x > q.dis) {
+		return (qty_t){q.dis, q.hid - x};
+	}
+	return (qty_t){x, 0.dd};
+}
 
 
 static void
@@ -83,6 +106,7 @@ ochan_cb(bot_t UNUSED(b), omsg_t m)
 		vsum.vqty[m.fid.sid] += m.exe.qty;
 		break;
 	case OMSG_ACC:
+		acc = m.exa;
 		break;
 	default:
 		break;
@@ -146,6 +170,7 @@ hbeat_cb(bot_t b)
 	/* set up new liquidity pyramid around BB with spreads BS */
 	const qx_t qinc = qty(Q);
 	qx_t q = qinc;
+	qty_t bq = qty0, aq = qty0;
 
 	/* exponential prices, linearly increasing quantities */
 	//for (size_t i = 0U; i < nlvl; i++, q += q, o.qty = qty_add(o.qty, Q))
@@ -155,11 +180,15 @@ hbeat_cb(bot_t b)
 
 		o.sid = SIDE_ASK;
 		o.lmt = quantizepx((px_t)(bb + sq), mint);
+		o.qty = _maxq(Q, aq, maxq + acc.base);
 		add_omsg(b, (omsg_t){OMSG_ORD, INS, .ord = o});
+		aq = qty_add(aq, o.qty);
 
 		o.sid = SIDE_BID;
 		o.lmt = quantizepx((px_t)(bb - sq), mint);
+		o.qty = _maxq(Q, bq, maxq - acc.base);
 		add_omsg(b, (omsg_t){OMSG_ORD, INS, .ord = o});
+		bq = qty_add(bq, o.qty);
 
 		bot_send(b);
 	}
@@ -228,6 +257,12 @@ main(int argc, char *argv[])
 		}
 	}
 
+	if (argi->max_arg) {
+		maxq = strtoqx(argi->max_arg, NULL);
+	} else {
+		maxq = NANQX;
+	}
+
 	if (argi->auction_arg) {
 		if (argi->auction_arg == YUCK_OPTARG_NONE) {
 			nauc = 1U;
@@ -252,6 +287,7 @@ Error: argument to levels must be positive.\n", stderr);
 	totq = (qx_t)nlvl * qty(Q) * (qx_t)NSIDES;
 	mins = (qx_t)mint / qty(Q);
 	bs = mint;
+	(void)totq;
 
 	/* initialise the bot */
 	if (UNLIKELY((b = make_bot(host)) == NULL)) {
