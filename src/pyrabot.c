@@ -248,6 +248,15 @@ main(int argc, char *argv[])
 		host = argi->host_arg;
 	}
 
+	if (argi->freq_arg) {
+		if ((freq = strtod(argi->freq_arg, NULL)) <= 0.0) {
+			fputs("\
+Error: argument to freq must be positive.\n", stderr);
+			rc = 1;
+			goto out;
+		}
+	}
+
 	if (argi->qty_arg) {
 		char *on;
 		Q.dis = strtoqx(argi->qty_arg, &on);
