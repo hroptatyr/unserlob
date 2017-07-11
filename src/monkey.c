@@ -15,7 +15,9 @@
 #define qxtostr		d64tostr
 #define pxtostr		d64tostr
 
-static qx_t maxq;
+#define INFQX		((_Decimal64)__builtin_inf())
+
+static qx_t maxq = INFQX;
 static qx_t basq = 100.dd;
 static size_t N = 5U;
 
@@ -66,9 +68,10 @@ hbeat_cb(bot_t b)
 			q += x & 0b1U ? basq : -basq;
 		}
 	}
-	if (q > 0.dd && !(acc.base + q > maxq)) {
+
+	if (q > 0.dd && acc.base + q <= maxq) {
 		s = SIDE_LONG;
-	} else if (q < 0.dd && !(-acc.base - q > maxq)) {
+	} else if (q < 0.dd && -acc.base - q <= maxq) {
 		s = SIDE_SHORT;
 		q = -q;
 	} else {
@@ -122,8 +125,6 @@ Error: argument to summands must be positive.\n", stderr);
 
 	if (argi->max_arg) {
 		maxq = strtoqx(argi->max_arg, NULL);
-	} else {
-		maxq = NANQX;
 	}
 
 	if (argi->qty_arg) {
