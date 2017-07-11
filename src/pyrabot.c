@@ -43,6 +43,8 @@
 #define qxtostr		d64tostr
 #define pxtostr		d64tostr
 
+#define INFQX		((_Decimal64)__builtin_inf())
+
 struct vwap_s {
 	qx_t vprc;
 	qx_t vqty[NSIDES];
@@ -50,7 +52,7 @@ struct vwap_s {
 
 static size_t nlvl = 1U;
 static qty_t Q = {500.dd, 500.dd};
-static qx_t maxq;
+static qx_t maxq = INFQX;
 /* min tick */
 static px_t mint = 0.01dd;
 static px_t mins;
@@ -269,8 +271,6 @@ Error: argument to freq must be positive.\n", stderr);
 
 	if (argi->max_arg) {
 		maxq = strtoqx(argi->max_arg, NULL);
-	} else {
-		maxq = NANQX;
 	}
 
 	if (argi->auction_arg) {

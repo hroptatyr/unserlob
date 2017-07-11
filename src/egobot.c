@@ -16,12 +16,14 @@
 #define qxtostr		d64tostr
 #define pxtostr		d64tostr
 
+#define INFQX		((_Decimal64)__builtin_inf())
+
 static VSLStreamStatePtr rstr;
 static double alpha = 1.;
 static double sigma = 1.;
 static double mktv = 0.;
 static px_t sprd = 0.02dd;
-static qx_t maxq;
+static qx_t maxq = INFQX;
 static qty_t Q = {500.dd, 500.dd};
 
 static clob_oid_t coid[NSIDES];
@@ -211,8 +213,6 @@ main(int argc, char *argv[])
 
 	if (argi->max_arg) {
 		maxq = strtoqx(argi->max_arg, NULL);
-	} else {
-		maxq = NANQX;
 	}
 
 	if (argi->qty_arg) {
