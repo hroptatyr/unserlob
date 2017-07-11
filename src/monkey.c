@@ -15,8 +15,11 @@
 #define qxtostr		d64tostr
 #define pxtostr		d64tostr
 
+static qx_t maxq;
 static qx_t basq = 100.dd;
 static size_t N = 5U;
+
+static unxs_exa_t acc = {0.dd, 0.dd};
 
 static const char *cont;
 static size_t conz;
@@ -37,6 +40,19 @@ init_rng(uint64_t seed)
 }
 
 static void
+ochan_cb(bot_t UNUSED(b), omsg_t m)
+{
+	switch (m.typ) {
+	case OMSG_ACC:
+		acc = m.exa;
+		break;
+	default:
+		break;
+	}
+	return;
+}
+
+static void
 hbeat_cb(bot_t b)
 {
 /* generate a random trade */
@@ -50,9 +66,9 @@ hbeat_cb(bot_t b)
 			q += x & 0b1U ? basq : -basq;
 		}
 	}
-	if (q > 0.dd) {
+	if (q > 0.dd && !(acc.base + q > maxq)) {
 		s = SIDE_LONG;
-	} else if (q < 0.dd) {
+	} else if (q < 0.dd && !(-acc.base - q > maxq)) {
 		s = SIDE_SHORT;
 		q = -q;
 	} else {
@@ -104,6 +120,12 @@ Error: argument to summands must be positive.\n", stderr);
 		}
 	}
 
+	if (argi->max_arg) {
+		maxq = strtoqx(argi->max_arg, NULL);
+	} else {
+		maxq = NANQX;
+	}
+
 	if (argi->qty_arg) {
 		if ((basq = strtoqx(argi->qty_arg, NULL)) <= 0.dd) {
 			fputs("\
@@ -127,6 +149,7 @@ Error: cannot run in daemon mode\n", stderr);
 		goto kil;
 	}
 
+	b->ochan_cb = ochan_cb;
 	b->timer_cb = hbeat_cb;
 	bot_set_timer(b, freq, freq);
 
