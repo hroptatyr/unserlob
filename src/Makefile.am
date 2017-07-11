@@ -141,6 +141,17 @@ pyrabot_LDFLAGS += -mkl
 pyrabot_LDADD = libdfp.a liblol.a
 BUILT_SOURCES += pyrabot.yucc
 
+pkglibexec_PROGRAMS += trendbot
+trendbot_SOURCES = trendbot.c trendbot.yuck
+trendbot_CPPFLAGS = $(AM_CPPFLAGS)
+trendbot_CPPFLAGS += $(lol_CFLAGS)
+trendbot_CPPFLAGS += -mkl
+trendbot_LDFLAGS = $(AM_LDFLAGS)
+trendbot_LDFLAGS += $(lol_LIBS)
+trendbot_LDFLAGS += -mkl
+trendbot_LDADD = libdfp.a liblol.a
+BUILT_SOURCES += trendbot.yucc
+
 
 ## version rules
 version.c: version.c.in $(top_builddir)/.version
