@@ -34,6 +34,7 @@ static size_t conz;
 #if defined __INTEL_COMPILER
 # pragma warning (disable: 188)
 # pragma warning (disable: 589)
+# pragma warning (disable: 981)
 #endif	/* __INTEL_COMPILER */
 
 
@@ -44,16 +45,24 @@ ochan_cb(bot_t b, omsg_t m)
 		px_t mean, labs;
 
 	case OMSG_ACC:
-		acc = m.exa;
 		/* cancel any outstanding orders */
 		add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[SIDE_BID]});
 		add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[SIDE_ASK]});
 
 		/* store pnl if we're flat */
-		if (acc.base == 0.dd) {
-			pnl = acc.term;
+		if (m.exa.base == 0.dd) {
+			pnl = m.exa.term;
+			acc = m.exa;
 			goto send;
+		} else if (signbitd64(m.exa.base) != signbitd64(acc.base)) {
+			/* aaah, ping-pong mode innit? */
+			qx_t vol = acc.base - m.exa.base;
+			qx_t val = acc.term - m.exa.term;
+			pnl = m.exa.term + val / vol;
 		}
+
+		/* defo store the guy */
+		acc = m.exa;
 
 		/* calc mean price otherwise */
 		mean = (px_t)quantizeqx((pnl - acc.term) / acc.base, acc.term);
