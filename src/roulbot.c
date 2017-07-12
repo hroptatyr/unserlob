@@ -19,6 +19,7 @@
 
 static qty_t Q = {1.dd, 0.dd};
 static clob_side_t dir = NSIDES;
+static unsigned int pingpongp;
 
 static clob_oid_t coid[NSIDES];
 static unxs_exa_t acc = {0.dd, 0.dd};
@@ -69,7 +70,7 @@ ochan_cb(bot_t b, omsg_t m)
 		const qx_t babs = fabsqx(acc.base);
 		clob_ord_t tak = {
 			TYPE_LMT, (acc.base < 0.dd),
-			.qty = {Q.dis, babs - Q.dis},
+			.qty = {Q.dis, babs + Q.hid - (!pingpongp ? Q.dis : 0.dd)},
 			.lmt = mean + labs
 		};
 		clob_ord_t mor = {
@@ -128,6 +129,8 @@ main(int argc, char *argv[])
 	if (argi->host_arg) {
 		host = argi->host_arg;
 	}
+
+	pingpongp = argi->ping_pong_flag;
 
 	if (!argi->target_arg) {
 		fputs("\
