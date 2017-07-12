@@ -29,6 +29,8 @@ static unxs_exa_t acc = {0.dd, 0.dd};
 static qx_t vol = 0.dd;
 static qx_t vpr = 0.dd;
 
+static unsigned int contrarianp;
+
 static const char *cont;
 static size_t conz;
 #define INS		.ins = cont, .inz = conz
@@ -73,14 +75,16 @@ hbeat_cb(bot_t b)
 		if (vol >= basq) {
 			/* support the uptrend */
 			qx_t q = min(maxq - acc.base, basq);
-			m.ord = (clob_ord_t){TYPE_MKT, SIDE_LONG, {q, 0.dd}};
+			clob_side_t s = (clob_side_t)(SIDE_LONG ^ contrarianp);
+			m.ord = (clob_ord_t){TYPE_MKT, s, {q, 0.dd}};
 			add_omsg(b, m);
 		}
 	} else if (new < old) {
 		if (vol >= basq) {
 			/* support the downtrend */
 			qx_t q = min(maxq + acc.base, basq);
-			m.ord = (clob_ord_t){TYPE_MKT, SIDE_SHORT, {q, 0.dd}};
+			clob_side_t s = (clob_side_t)(SIDE_SHORT ^ contrarianp);
+			m.ord = (clob_ord_t){TYPE_MKT, s, {q, 0.dd}};
 			add_omsg(b, m);
 		}
 	}
@@ -118,6 +122,8 @@ main(int argc, char *argv[])
 	if (argi->host_arg) {
 		host = argi->host_arg;
 	}
+
+	contrarianp = argi->contrarian_flag;
 
 	if (argi->freq_arg) {
 		freq = strtod(argi->freq_arg, NULL);

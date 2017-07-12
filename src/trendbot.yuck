@@ -7,3 +7,4 @@ Trading bot that collects past trades to send a matching trade.
   -F, --freq=I          Collect trades over a period of I.
   --max=P               Maximum position, default: unlimited.
   -Q, --qty=Q           Threshold quantity, default: 1000
+  --contrarian          Go against the trend.
