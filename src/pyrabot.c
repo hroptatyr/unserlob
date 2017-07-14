@@ -44,6 +44,7 @@
 #define pxtostr		d64tostr
 
 #define INFQX		((_Decimal64)__builtin_inf())
+#define fabsqx		fabsd64
 
 struct vwap_s {
 	qx_t vprc;
@@ -53,6 +54,7 @@ struct vwap_s {
 static size_t nlvl = 1U;
 static qty_t Q = {500.dd, 500.dd};
 static qx_t maxq = INFQX;
+static px_t maxs = 1.dd;
 /* min tick */
 static px_t mint = 0.01dd;
 static px_t mins;
@@ -180,6 +182,13 @@ hbeat_cb(bot_t b)
 	/* linear prices, constant quantities */
 	for (size_t i = 0U; i < nlvl; i++, q += qinc) {
 		qx_t sq = max(bs * q, mint / 2.dd);
+		/* calculate renormalised spread */
+		px_t rs = (px_t)(sq / (fabsqx(bb) + sq));
+
+		if (UNLIKELY(rs > maxs)) {
+			/* solve reno-spread equation for sq */
+			sq = (qx_t)maxs * (fabsqx(bb) + sq);
+		}
 
 		o.sid = SIDE_ASK;
 		o.lmt = quantizepx((px_t)(bb + sq), mint);
@@ -271,6 +280,10 @@ Error: argument to freq must be positive.\n", stderr);
 
 	if (argi->max_arg) {
 		maxq = strtoqx(argi->max_arg, NULL);
+	}
+
+	if (argi->max_spread_arg) {
+		maxs = strtoqx(argi->max_spread_arg, NULL);
 	}
 
 	if (argi->auction_arg) {

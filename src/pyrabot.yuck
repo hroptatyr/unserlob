@@ -9,6 +9,7 @@ Trading bot that uses order flow to guesstimate mid point.
                         default: 500+500
   -N, --levels=N        Post liquidity on N levels, default: 1.
   --max=P               Maximum position, default: unlimited.
+  --max-spread=X        Maximum (renormalised) spread, default: 1.
   --auction[=N]         Synchronise with an auctioning market.
                         N = 1 every auction, 2 every second
                         auction, etc. default: 1
