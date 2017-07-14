@@ -52,6 +52,11 @@ ochan_cb(bot_t b, omsg_t m)
 		/* store pnl if we're flat */
 		if (acc.base == 0.dd) {
 			pnl = acc.term;
+			if (pingpongp) {
+				/* just keep on going, opposite direction now */
+				clob_ord_t o = {TYPE_MKT, dir ^= 1, Q};
+				add_omsg(b, (omsg_t){OMSG_ORD, INS, .ord = o});
+			}
 			goto send;
 		}
 
@@ -70,7 +75,7 @@ ochan_cb(bot_t b, omsg_t m)
 		const qx_t babs = fabsqx(acc.base);
 		clob_ord_t tak = {
 			TYPE_LMT, (acc.base < 0.dd),
-			.qty = {Q.dis, babs + Q.hid - (!pingpongp ? Q.dis : 0.dd)},
+			.qty = {Q.dis, babs + Q.hid - Q.dis},
 			.lmt = mean + labs
 		};
 		clob_ord_t mor = {
