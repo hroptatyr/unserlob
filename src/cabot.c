@@ -246,11 +246,26 @@ prnt_acct(int s, size_t ins)
 	len += (memcpy(buf, instr + instz[ins], thisz), thisz);
 	buf[len++] = '\t';
 	for (size_t i = 0U; i < nuser; i++) {
+		qx_t op;
+
+		if (UNLIKELY(len >= countof(buf) - 64U)) {
+			/* write interim */
+			write(s, buf, len);
+			len = 0U;
+		}
+
 		len += qxtostr(buf + len, sizeof(buf) - len,
 			       accts[i * NINSTR + ins].base);
 		buf[len++] = '/';
 		len += qxtostr(buf + len, sizeof(buf) - len,
 			       accts[i * NINSTR + ins].term);
+		
+		buf[len++] = '(';
+		op = -accts[i * NINSTR + ins].term /
+			accts[i * NINSTR + ins].base;
+		op = quantizeqx(op, accts[i * NINSTR + ins].term);
+		len += qxtostr(buf + len, sizeof(buf) - len, op);
+		buf[len++] = ')';
 		buf[len++] = ' ';
 	}
 	buf[len++] = '\n';
