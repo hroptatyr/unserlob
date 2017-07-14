@@ -105,7 +105,7 @@ qchan_cb(bot_t UNUSED(b), qmsg_t m)
 {
 	switch (m.typ) {
 	case QMSG_TOP:
-		if (memcmp(m.ins, cont, conz)) {
+		if (m.inz < conz || memcmp(m.ins, cont, conz)) {
 			/* not our quote */
 			break;
 		}

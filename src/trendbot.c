@@ -1,6 +1,7 @@
 #if defined HAVE_CONFIG_H
 # include "config.h"
 #endif	/* HAVE_CONFIG_H */
+#include <string.h>
 #include <time.h>
 #if defined HAVE_DFP754_H
 # include <dfp754.h>
@@ -41,6 +42,10 @@ qchan_cb(bot_t UNUSED(b), qmsg_t m)
 {
 	switch (m.typ) {
 	case QMSG_TRA:
+		if (m.inz < conz || memcmp(m.ins, cont, conz)) {
+			/* not our quote */
+			break;
+		}
 		vol += m.quo.new;
 		vpr += m.quo.new * m.quo.prc;
 		break;
@@ -67,26 +72,25 @@ static void
 hbeat_cb(bot_t b)
 {
 /* generate a random trade */
+	static size_t nlong, nshort;
 	static px_t old = NANQX;
 	omsg_t m = {OMSG_ORD, INS};
 	px_t new = (px_t)(vpr / vol);
 
-	if (new > old) {
-		if (vol >= basq) {
-			/* support the uptrend */
-			qx_t q = min(maxq - acc.base, basq);
-			clob_side_t s = (clob_side_t)(SIDE_LONG ^ contrarianp);
-			m.ord = (clob_ord_t){TYPE_MKT, s, {q, 0.dd}};
-			add_omsg(b, m);
-		}
-	} else if (new < old) {
-		if (vol >= basq) {
-			/* support the downtrend */
-			qx_t q = min(maxq + acc.base, basq);
-			clob_side_t s = (clob_side_t)(SIDE_SHORT ^ contrarianp);
-			m.ord = (clob_ord_t){TYPE_MKT, s, {q, 0.dd}};
-			add_omsg(b, m);
-		}
+	if (new > old && vol >= basq && nlong++ < 10U) {
+		/* support the uptrend */
+		qx_t q = min(maxq - acc.base, basq);
+		clob_side_t s = (clob_side_t)(SIDE_LONG ^ contrarianp);
+		m.ord = (clob_ord_t){TYPE_MKT, s, {q, 0.dd}};
+		add_omsg(b, m);
+		nshort = 0U;
+	} else if (new < old && vol >= basq && nshort++ < 10U) {
+		/* support the downtrend */
+		qx_t q = min(maxq + acc.base, basq);
+		clob_side_t s = (clob_side_t)(SIDE_SHORT ^ contrarianp);
+		m.ord = (clob_ord_t){TYPE_MKT, s, {q, 0.dd}};
+		add_omsg(b, m);
+		nlong = 0U;
 	}
 	/* send any orders */
 	bot_send(b);
