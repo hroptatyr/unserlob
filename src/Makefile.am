@@ -49,6 +49,19 @@ lobmon_LDFLAGS = $(AM_LDFLAGS)
 lobmon_LDFLAGS += $(ev_LIBS)
 BUILT_SOURCES += lobmon.yucc
 
+bin_PROGRAMS += lobcch
+lobcch_SOURCES = lobcch.c lobcch.yuck
+lobcch_SOURCES += sock.c sock.h
+lobcch_SOURCES += hash.c hash.h
+lobcch_CPPFLAGS = $(AM_CPPFLAGS)
+lobcch_CPPFLAGS += $(ev_CFLAGS)
+lobcch_CPPFLAGS += $(books_CFLAGS)
+lobcch_LDFLAGS = $(AM_LDFLAGS)
+lobcch_LDFLAGS += $(ev_LIBS)
+lobcch_LDFLAGS += $(books_LIBS)
+lobcch_LDADD = libdfp.a
+BUILT_SOURCES += lobcch.yucc
+
 bin_PROGRAMS += lobot
 lobot_SOURCES = lobot.c lobot.yuck
 lobot_SOURCES += sock.c sock.h
