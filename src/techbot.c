@@ -26,7 +26,7 @@
 static qx_t maxq = INFQX;
 static qx_t basq = 100.dd;
 
-static unxs_exa_t acc = {100.dd, 0.dd};
+static unxs_exa_t acc = {0.dd, 0.dd};
 static px_t last = NANPX;
 
 static const char *cont;
@@ -89,7 +89,7 @@ hbeat_cb(bot_t b)
 				clob_side_t x = s ? SIDE_LONG : SIDE_SHORT;
 				qx_t q = fabsqx(acc.base);
 
-				q = min(maxq - q, basq);
+				q = min(maxq - q, q + basq);
 				m.ord = (clob_ord_t){TYPE_MKT, x, {q, 0.dd}};
 				add_omsg(b, m);
 				bot_send(b);
@@ -141,9 +141,7 @@ Error: argument to qty must be positive.\n", stderr);
 			rc = 1;
 			goto out;
 		}
-		acc.base = basq;
 	}
-	basq *= 2.dd;
 
 	/* initialise the bot */
 	if (UNLIKELY((b = make_bot(host)) == NULL)) {
