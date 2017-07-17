@@ -30,8 +30,6 @@ static unxs_exa_t acc = {0.dd, 0.dd};
 static qx_t vol = 0.dd;
 static qx_t vpr = 0.dd;
 
-static unsigned int contrarianp;
-
 static const char *cont;
 static size_t conz;
 #define INS		.ins = cont, .inz = conz
@@ -69,7 +67,7 @@ ochan_cb(bot_t UNUSED(b), omsg_t m)
 }
 
 static void
-hbeat_cb(bot_t b)
+trend_cb(bot_t b)
 {
 /* generate a random trade */
 	static size_t nlong, nshort;
@@ -80,15 +78,44 @@ hbeat_cb(bot_t b)
 	if (new > old && vol >= basq && nlong++ < 10U) {
 		/* support the uptrend */
 		qx_t q = min(maxq - acc.base, basq);
-		clob_side_t s = (clob_side_t)(SIDE_LONG ^ contrarianp);
-		m.ord = (clob_ord_t){TYPE_MKT, s, {q, 0.dd}};
+		m.ord = (clob_ord_t){TYPE_MKT, SIDE_LONG, {q, 0.dd}};
 		add_omsg(b, m);
 		nshort = 0U;
 	} else if (new < old && vol >= basq && nshort++ < 10U) {
 		/* support the downtrend */
 		qx_t q = min(maxq + acc.base, basq);
-		clob_side_t s = (clob_side_t)(SIDE_SHORT ^ contrarianp);
-		m.ord = (clob_ord_t){TYPE_MKT, s, {q, 0.dd}};
+		m.ord = (clob_ord_t){TYPE_MKT, SIDE_SHORT, {q, 0.dd}};
+		add_omsg(b, m);
+		nlong = 0U;
+	}
+	/* send any orders */
+	bot_send(b);
+
+	/* reset counters */
+	vol = vpr = 0.dd;
+	old = new;
+	return;
+}
+
+static void
+contr_cb(bot_t b)
+{
+/* generate a random trade */
+	static size_t nlong, nshort;
+	static px_t old = NANQX;
+	omsg_t m = {OMSG_ORD, INS};
+	px_t new = (px_t)(vpr / vol);
+
+	if (new > old && vol >= basq && nlong++ < 10U) {
+		/* bet against uptrend */
+		qx_t q = min(maxq + acc.base, basq);
+		m.ord = (clob_ord_t){TYPE_MKT, SIDE_SHORT, {q, 0.dd}};
+		add_omsg(b, m);
+		nshort = 0U;
+	} else if (new < old && vol >= basq && nshort++ < 10U) {
+		/* bet against downtrend */
+		qx_t q = min(maxq - acc.base, basq);
+		m.ord = (clob_ord_t){TYPE_MKT, SIDE_LONG, {q, 0.dd}};
 		add_omsg(b, m);
 		nlong = 0U;
 	}
@@ -127,8 +154,6 @@ main(int argc, char *argv[])
 		host = argi->host_arg;
 	}
 
-	contrarianp = argi->contrarian_flag;
-
 	if (argi->freq_arg) {
 		freq = strtod(argi->freq_arg, NULL);
 	}
@@ -160,7 +185,7 @@ Error: cannot run in daemon mode\n", stderr);
 
 	b->qchan_cb = qchan_cb;
 	b->ochan_cb = ochan_cb;
-	b->timer_cb = hbeat_cb;
+	b->timer_cb = !argi->contrarian_flag ? trend_cb : contr_cb;
 	bot_set_timer(b, freq, freq);
 
 	/* go go go */
