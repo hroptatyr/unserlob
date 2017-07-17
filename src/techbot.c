@@ -29,6 +29,8 @@ static qx_t basq = 100.dd;
 static unxs_exa_t acc = {0.dd, 0.dd};
 static px_t last = NANPX;
 
+static unsigned int contrarianp;
+
 static const char *cont;
 static size_t conz;
 #define INS		.ins = cont, .inz = conz
@@ -86,7 +88,8 @@ hbeat_cb(bot_t b)
 		with (unsigned int s = signbitd64((s1 * 4.dd - s2) / 64.dd)) {
 			if (spos ^ s) {
 				omsg_t m = {OMSG_ORD, INS};
-				clob_side_t x = s ? SIDE_LONG : SIDE_SHORT;
+				clob_side_t x = (s ^ contrarianp)
+					? SIDE_SHORT : SIDE_LONG;
 				qx_t q = fabsqx(acc.base);
 
 				q = min(maxq - q, q + basq);
@@ -125,6 +128,8 @@ main(int argc, char *argv[])
 	if (argi->host_arg) {
 		host = argi->host_arg;
 	}
+
+	contrarianp = argi->contrarian_flag;
 
 	if (argi->freq_arg) {
 		freq = strtod(argi->freq_arg, NULL);

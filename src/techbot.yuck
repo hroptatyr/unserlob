@@ -7,3 +7,4 @@ Trading bot that uses slow and fast SMA to determine position.
   -F, --freq=I          Collect trades over a period of I.
   --max=P               Maximum position, default: unlimited.
   -Q, --qty=Q           Threshold quantity, default: 1000
+  --contrarian          Go against the trend.
