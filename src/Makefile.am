@@ -30,6 +30,7 @@ liblol_a_SOURCES =
 liblol_a_SOURCES += lol.c lol.h
 liblol_a_SOURCES += bot.c bot.h
 liblol_a_SOURCES += sock.c sock.h
+liblol_a_SOURCES += nifty.h
 liblol_a_CPPFLAGS = $(AM_CPPFLAGS)
 liblol_a_CPPFLAGS += $(ev_CFLAGS)
 liblol_a_CPPFLAGS += $(dfp754_CFLAGS)
