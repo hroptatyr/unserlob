@@ -145,8 +145,7 @@ main(int argc, char *argv[])
 	ev_signal_start(EV_A_ sigint_watcher);
 
 	/* init the multicast socket */
-	if (!argi->info_flag) {
-		int s;
+	with (int s) {
 		if (UNLIKELY((s = mc6_socket()) < 0)) {
 			serror("\
 Error: cannot open socket");
@@ -167,8 +166,7 @@ Error: cannot join multicast group on socket %d", s);
 		beef[0U].data = "TAQ";
 	}
 
-	if (!argi->info_flag) {
-		int s;
+	with (int s) {
 		if (UNLIKELY((s = mc6_socket()) < 0)) {
 			serror("\
 Error: cannot open socket");
