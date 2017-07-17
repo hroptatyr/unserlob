@@ -1,5 +1,3 @@
-Usage: slobmon
+Usage: lobmon
 
-Show slob MM experiment
-
-  -i, --info            Only display the information channel.
+Show unserlob channels.
