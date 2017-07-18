@@ -527,20 +527,34 @@ snap_cb(EV_P_ ev_timer *UNUSED(w), int UNUSED(revents))
 		char buf[256U];
 		ssize_t len = sizeof(wsfr_t);
 
-		len += memncpy(buf + len, cont[i], strlen(cont[i]));
-		buf[len++] = '\t';
-		len += pxtostr(
-			buf + len, sizeof(buf) - len,
-			HIST(i + 3U * iper + SIDE_UNK));
-		buf[len++] = ' ';
-		len += pxtostr(
-			buf + len, sizeof(buf) - len,
-			HIST(i + 3U * iper + SIDE_BID));
-		buf[len++] = '/';
-		len += pxtostr(
-			buf + len, sizeof(buf) - len,
-			HIST(i + 3U * iper + SIDE_ASK));
-		buf[len++] = '\n';
+		buf[len++] = '{';
+		len += memncpy(buf + len, "\"tra\":", 6U);
+		with (px_t p = HIST(i + 3U * iper + SIDE_UNK)) {
+			if (!isnanpx(p)) {
+				len += pxtostr(buf + len, sizeof(buf) - len, p);
+			} else {
+				len += memncpy(buf + len, "null", 4U);
+			}
+		}
+		buf[len++] = ',';
+		len += memncpy(buf + len, "\"bid\":", 6U);
+		with (px_t p = HIST(i + 3U * iper + SIDE_BID)) {
+			if (!isnanpx(p)) {
+				len += pxtostr(buf + len, sizeof(buf) - len, p);
+			} else {
+				len += memncpy(buf + len, "null", 4U);
+			}
+		}
+		buf[len++] = ',';
+		len += memncpy(buf + len, "\"ask\":", 6U);
+		with (px_t p = HIST(i + 3U * iper + SIDE_ASK)) {
+			if (!isnanpx(p)) {
+				len += pxtostr(buf + len, sizeof(buf) - len, p);
+			} else {
+				len += memncpy(buf + len, "null", 4U);
+			}
+		}
+		buf[len++] = '}';
 		len = ws_framify(buf, len - sizeof(wsfr_t));
 
 		for (size_t j = 0U; j < nsock; j++) {
@@ -574,6 +588,11 @@ snap_cb(EV_P_ ev_timer *UNUSED(w), int UNUSED(revents))
 
 	/* up the iper  */
 	iper = (iper + 1U) % nper;
+	/* reset aggregates */
+	for (size_t i = 0U; i < nbook + nctch; i++) {
+		HIST(i + 3U * iper) = 0.dd;
+		HISQ(i + 3U * iper) = 0.dd;
+	}
 	return;
 }
 
