@@ -27,11 +27,13 @@
 #include <books/books.h>
 #include "dfp754_d64.h"
 #include "sock.h"
+#include "sha.h"
 #include "hash.h"
 #include "nifty.h"
 
 #define MCAST_ADDR	"ff05::134"
 #define MCAST_PORT	7978
+#define WS_PORT		7980
 
 #define strtopx		strtod64
 #define strtoqx		strtod64
@@ -58,6 +60,20 @@ typedef struct {
 	qx_t A;
 } lvl_t;
 
+typedef struct  __attribute__((packed)) {
+	uint8_t code:4;
+	uint8_t rsv3:1;
+	uint8_t rsv2:1;
+	uint8_t rsv1:1;
+	uint8_t finp:1;
+
+	uint8_t plen:7;
+	uint8_t mask:1;
+
+	uint8_t elen[8U];
+	uint32_t mkey;
+} wsfr_t;
+
 #define NOT_A_XQUO	((xquo_t){NOT_A_QUO})
 #define NOT_A_XQUO_P(x)	(NOT_A_QUO_P((x).q))
 
@@ -75,6 +91,10 @@ static px_t *hist;
 static qx_t *hisq;
 static size_t nper = 61U;
 static size_t iper;
+/* websocket users */
+static int *sock;
+static size_t nsock;
+static size_t zsock;
 
 /* no parens around X to add additive access */
 #define HIST(x)	hist[3U * nper * x]
@@ -104,6 +124,85 @@ memncpy(char *restrict tgt, const char *src, size_t zrc)
 	return zrc;
 }
 
+static char*
+xmemmem(const char *hay, const size_t hayz, const char *ndl, const size_t ndlz)
+{
+/* point NDLZ past finding in HAY */
+	const char *const eoh = hay + hayz;
+	const char *const eon = ndl + ndlz;
+	const char *hp;
+	const char *np;
+	const char *cand;
+	unsigned int hsum;
+	unsigned int nsum;
+	unsigned int eqp;
+
+	/* trivial checks first
+         * a 0-sized needle is defined to be found anywhere in haystack
+         * then run strchr() to find a candidate in HAYSTACK (i.e. a portion
+         * that happens to begin with *NEEDLE) */
+	if (ndlz == 0UL) {
+		return deconst(hay);
+	} else if ((hay = memchr(hay, *ndl, hayz)) == NULL) {
+		/* trivial */
+		return NULL;
+	}
+
+	/* First characters of haystack and needle are the same now. Both are
+	 * guaranteed to be at least one character long.  Now computes the sum
+	 * of characters values of needle together with the sum of the first
+	 * needle_len characters of haystack. */
+	for (hp = hay + 1U, np = ndl + 1U, hsum = *hay, nsum = *hay, eqp = 1U;
+	     hp < eoh && np < eon;
+	     hsum ^= *hp, nsum ^= *np, eqp &= *hp == *np, hp++, np++);
+
+	/* HP now references the (NZ + 1)-th character. */
+	if (np < eon) {
+		/* haystack is smaller than needle, :O */
+		return NULL;
+	} else if (eqp) {
+		/* found a match */
+		return deconst(hay + ndlz);
+	}
+
+	/* now loop through the rest of haystack,
+	 * updating the sum iteratively */
+	for (cand = hay; hp < eoh; hp++) {
+		hsum ^= *cand++;
+		hsum ^= *hp;
+
+		/* Since the sum of the characters is already known to be
+		 * equal at that point, it is enough to check just NZ - 1
+		 * characters for equality,
+		 * also CAND is by design < HP, so no need for range checks */
+		if (hsum == nsum && memcmp(cand, ndl, ndlz - 1U) == 0) {
+			return deconst(cand + ndlz);
+		}
+	}
+	return NULL;
+}
+
+static size_t
+base64(char *restrict tgt, sha_t src)
+{
+	static const char trns[] =
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef"
+		"ghijklmnopqrstuvwxyz0123456789+/";
+	size_t t = 0U;
+
+	for (size_t s = 0U; s < 18U; s += 3U) {
+		tgt[t++] = trns[src[s + 0U] >> 2U];
+		tgt[t++] = trns[(src[s + 0U] << 4U ^ src[s + 1U] >> 4U) & 0x3fU];
+		tgt[t++] = trns[(src[s + 1U] << 2U ^ src[s + 2U] >> 6U) & 0x3fU];
+		tgt[t++] = trns[src[s + 2U] & 0x3fU];
+	}
+	tgt[t++] = trns[src[18] >> 2U];
+	tgt[t++] = trns[(src[18U] << 4U ^ src[19U] >> 4U) & 0x3fU];
+	tgt[t++] = trns[(src[19U] << 2U) & 0x3fU];
+	tgt[t++] = '=';
+	return t;
+}
+
 static void
 init_hist(size_t n)
 {
@@ -112,6 +211,132 @@ init_hist(size_t n)
 		HISQ(n + i) = 0.dd;
 	}
 	return;
+}
+
+static uid_t
+add_user(int s)
+{
+	for (size_t i = 0U; i < nsock; i++) {
+		if (sock[i] < 0) {
+			sock[i] = s;
+			return i + 1U;
+		}
+	}
+	/* otherwise append */
+	if (UNLIKELY(nsock >= zsock)) {
+		zsock = (zsock * 2U) ?: 64U;
+		sock = realloc(sock, zsock * sizeof(*sock));
+	}
+	sock[nsock] = s;
+	return ++nsock;
+}
+
+static int
+kill_user(uid_t u)
+{
+	if (UNLIKELY(u <= 0)) {
+		return -1;
+	}
+	/* reset socket */
+	sock[u - 1] = -1;
+	return 0;
+}
+
+static ssize_t
+recv_hshk(char *restrict buf, size_t bsz)
+{
+	static const char rsp[] = "\
+HTTP/1.1 101 Switching Protocols\r\n\
+Upgrade: websocket\r\n\
+Connection: Upgrade\r\n\
+Sec-WebSocket-Accept: ";
+	static const char magic[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+	static const char key[] = "Sec-WebSocket-Key:";
+	const char *const eob = buf + bsz;
+
+	if (UNLIKELY(xmemmem(buf, bsz, "\r\n\r\n", 4U) == NULL)) {
+		/* nope, no processing possible */
+		return 0U;
+	}
+	/* yep, we processed him all */
+	with (const char *sec = xmemmem(buf, bsz, key, strlenof(key))) {
+		const char *eos;
+		size_t len;
+		sha_t s;
+
+		if (UNLIKELY(sec == NULL)) {
+			/* gotta be kidding */
+			break;
+		}
+		/* overread whitespace */
+		for (; sec < eob && *sec <= ' '; sec++);
+		/* find the end of the line */
+		for (eos = sec; eos < eob && *eos > ' '; eos++);
+
+		memmove(buf, sec, eos - sec);
+		memcpy(buf + (eos - sec), magic, strlenof(magic));
+
+		/* calc sha */
+		sha(&s, buf, strlenof(magic) + eos - sec);
+
+		/* prepare output */
+		len = memncpy(buf, rsp, strlenof(rsp));
+		len += base64(buf + len, s);
+		buf[len++] = '\r';
+		buf[len++] = '\n';
+		buf[len++] = '\r';
+		buf[len++] = '\n';
+		return len;
+	}
+	/* prep a result */
+	return -1;
+}
+
+static ssize_t
+ws_framify(char *restrict buf, size_t bsz)
+{
+/* assume BUF has wsfr_t in front */
+	wsfr_t fr = {
+		.code = 0x1U,
+		.rsv3 = 0U,
+		.rsv2 = 0U,
+		.rsv1 = 0U,
+		.finp = 1U,
+		.mask = 1U,
+		.plen = 0U,
+	};
+	size_t slen;
+
+	if (bsz >= 65536U) {
+		const uint64_t b64 = bsz;
+		fr.plen = 127U;
+		fr.elen[0U] = (uint8_t)(b64 >> 56U);
+		fr.elen[1U] = (uint8_t)(b64 >> 48U);
+		fr.elen[2U] = (uint8_t)(b64 >> 40U);
+		fr.elen[3U] = (uint8_t)(b64 >> 32U);
+		fr.elen[4U] = (uint8_t)(b64 >> 24U);
+		fr.elen[5U] = (uint8_t)(b64 >> 16U);
+		fr.elen[6U] = (uint8_t)(b64 >> 8U);
+		fr.elen[7U] = (uint8_t)(b64 >> 0U);
+		slen = sizeof(wsfr_t);
+	} else if (bsz >= 126U) {
+		fr.plen = 126U;
+		fr.elen[0U] = (uint8_t)(bsz >> 8U);
+		fr.elen[1U] = (uint8_t)(bsz >> 0U);
+		slen = offsetof(wsfr_t, elen) +
+			sizeof(uint16_t) + sizeof(fr.mkey);
+	} else {
+		fr.plen = bsz;
+		slen = offsetof(wsfr_t, elen) + sizeof(fr.mkey);
+	}
+
+	/* .. and payload */
+	memmove(buf + slen, buf + sizeof(wsfr_t), bsz);
+	/* copy framing ... */
+	memcpy(buf, &fr, slen);
+
+	/* otherwise */
+	return slen + bsz;
 }
 
 
@@ -287,7 +512,7 @@ beef_cb(EV_P_ ev_io *w, int UNUSED(revents))
 static void
 snap_cb(EV_P_ ev_timer *UNUSED(w), int UNUSED(revents))
 {
-	for (size_t i = 0U; i < nbook; i++) {
+	for (size_t i = 0U; i < nbook + nctch; i++) {
 		lvl_t l = snap_top(book[i]);
 		px_t t = snap_tra(HIST(i + 3U * iper), HISQ(i + 3U * iper));
 
@@ -297,7 +522,133 @@ snap_cb(EV_P_ ev_timer *UNUSED(w), int UNUSED(revents))
 		HISQ(i + 3U * iper + SIDE_BID) = l.B;
 		HISQ(i + 3U * iper + SIDE_ASK) = l.A;
 	}
+
+	for (size_t i = 0U; i < nbook + nctch; i++) {
+		char buf[256U];
+		ssize_t len = sizeof(wsfr_t);
+
+		len += memncpy(buf + len, cont[i], strlen(cont[i]));
+		buf[len++] = '\t';
+		len += pxtostr(
+			buf + len, sizeof(buf) - len,
+			HIST(i + 3U * iper + SIDE_UNK));
+		buf[len++] = ' ';
+		len += pxtostr(
+			buf + len, sizeof(buf) - len,
+			HIST(i + 3U * iper + SIDE_BID));
+		buf[len++] = '/';
+		len += pxtostr(
+			buf + len, sizeof(buf) - len,
+			HIST(i + 3U * iper + SIDE_ASK));
+		buf[len++] = '\n';
+		len = ws_framify(buf, len - sizeof(wsfr_t));
+
+		for (size_t j = 0U; j < nsock; j++) {
+			if (sock[j] < 0) {
+				continue;
+			}
+			send(sock[j], buf, len, 0);
+		}
+#if 0
+		for (size_t j = iper + 1U; j < nper + iper; j++) {
+			const size_t k = j % nper;
+			char buf[256U];
+			size_t len = 0U;
+
+			len += pxtostr(
+				buf + len, sizeof(buf) - len,
+				HIST(i + 3U * k + SIDE_UNK));
+			buf[len++] = ' ';
+			len += pxtostr(
+				buf + len, sizeof(buf) - len,
+				HIST(i + 3U * k + SIDE_BID));
+			buf[len++] = '/';
+			len += pxtostr(
+				buf + len, sizeof(buf) - len,
+				HIST(i + 3U * k + SIDE_ASK));
+			buf[len++] = '\n';
+			fwrite(buf, 1, len, stdout);
+		}
+#endif
+	}
+
+	/* up the iper  */
 	iper = (iper + 1U) % nper;
+	return;
+}
+
+
+/* web sockets */
+#define ZCLO	(4096U)
+#define UBSZ	(ZCLO - offsetof(struct uclo_s, buf))
+
+struct uclo_s {
+	ev_io w;
+	uid_t uid;
+	size_t bof;
+	char buf[];
+};
+
+static void
+data_cb(EV_P_ ev_io *w, int UNUSED(re))
+{
+	struct uclo_s *u = (void*)w;
+	ssize_t nrd;
+	ssize_t npr;
+
+	nrd = read(u->w.fd, u->buf + u->bof, UBSZ - u->bof);
+	if (UNLIKELY(nrd <= 0)) {
+		/* they want closing */
+		goto clo;
+	} else if (u->uid) {
+		/* huh, they're not supposed to message us */
+		u->bof = 0U;
+		return;
+	}
+	/* don't matter what they want, we want to upgrade the connection */
+	u->bof += nrd;
+	npr = recv_hshk(u->buf, u->bof);
+
+	if (UNLIKELY(npr < 0)) {
+		goto clo;;
+	} else if (UNLIKELY(npr == 0)) {
+		/* next time lucky? */
+		return;
+	}
+	/* we assume it worked */
+	send(w->fd, u->buf, npr, 0);
+	u->uid = add_user(w->fd);
+	return;
+
+clo:
+	fsync(w->fd);
+	printf("user %u %d fucked off\n", u->uid, w->fd);
+	kill_user(u->uid);
+	ev_io_stop(EV_A_ w);
+	shutdown(w->fd, SHUT_RDWR);
+	close(w->fd);
+	free(w);
+	return;
+}
+
+static void
+cake_cb(EV_P_ ev_io *w, int UNUSED(re))
+{
+/* we're tcp so we've got to accept() the bugger, don't forget :) */
+	struct sockaddr_storage sa;
+	socklen_t sa_size = sizeof(sa);
+	volatile int ns;
+	struct uclo_s *aw;
+
+	if ((ns = accept(w->fd, (struct sockaddr*)&sa, &sa_size)) < 0) {
+		return;
+	}
+
+	aw = malloc(ZCLO);
+        ev_io_init(&aw->w, data_cb, ns, EV_READ);
+        ev_io_start(EV_A_ &aw->w);
+	aw->uid = 0U;
+	aw->bof = 0U;
 	return;
 }
 
@@ -312,6 +663,7 @@ main(int argc, char *argv[])
 	static struct ipv6_mreq r[3U];
 	ev_signal sigint_watcher[1U];
 	ev_io beef[1U];
+	ev_io cake[1U];
 	ev_timer snap[1U];
 	/* use the default event loop unless you have special needs */
 	struct ev_loop *loop;
@@ -395,6 +747,19 @@ Error: cannot join multicast group on socket %d", s);
 		ev_io_start(EV_A_ beef);
 	}
 
+	/* init the tcp socket for ws access */
+	with (int s = listener(WS_PORT)) {
+		if (UNLIKELY(s < 0)) {
+			serror("\
+Error: cannot open socket");
+			rc = 1;
+			goto beef_fre;
+		}
+		/* hook into our event loop */
+		ev_io_init(cake, cake_cb, s, EV_READ);
+		ev_io_start(EV_A_ cake);
+	}
+
 	/* intialise snapshot timer */
 	ev_timer_init(snap, snap_cb, 1.0, 1.0);
 	ev_timer_start(EV_A_ snap);
@@ -402,29 +767,14 @@ Error: cannot join multicast group on socket %d", s);
 	/* now wait for events to arrive */
 	ev_loop(EV_A_ 0);
 
-	for (size_t i = 0U; i < nbook + nctch; i++) {
-		puts(cont[i]);
-		for (size_t j = iper + 1U; j < nper + iper; j++) {
-			const size_t k = j % nper;
-			char buf[256U];
-			size_t len = 0U;
-
-			len += pxtostr(
-				buf + len, sizeof(buf) - len,
-				HIST(i + 3U * k + SIDE_UNK));
-			buf[len++] = ' ';
-			len += pxtostr(
-				buf + len, sizeof(buf) - len,
-				HIST(i + 3U * k + SIDE_BID));
-			buf[len++] = '/';
-			len += pxtostr(
-				buf + len, sizeof(buf) - len,
-				HIST(i + 3U * k + SIDE_ASK));
-			buf[len++] = '\n';
-			fwrite(buf, 1, len, stdout);
-		}
+	/* and we're out */
+	with (int s = cake->fd) {
+		ev_io_stop(EV_A_ cake);
+		setsock_linger(s, 1);
+		close(s);
 	}
 
+beef_fre:
 	/* begin the freeing */
 	with (int s = beef->fd) {
 		ev_io_stop(EV_A_ beef);
@@ -433,6 +783,7 @@ Error: cannot join multicast group on socket %d", s);
 		close(s);
 	}
 
+nop:
 	if (nbook + nctch) {
 		for (size_t i = 0U; i < nbook + nctch; i++) {
 			book[i] = free_book(book[i]);
@@ -449,7 +800,6 @@ Error: cannot join multicast group on socket %d", s);
 		free(hisq);
 	}
 
-nop:
 	/* destroy the default evloop */
 	ev_default_destroy();
 

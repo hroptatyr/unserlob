@@ -53,6 +53,7 @@ bin_PROGRAMS += lobcch
 lobcch_SOURCES = lobcch.c lobcch.yuck
 lobcch_SOURCES += sock.c sock.h
 lobcch_SOURCES += hash.c hash.h
+lobcch_SOURCES += sha.c sha.h
 lobcch_CPPFLAGS = $(AM_CPPFLAGS)
 lobcch_CPPFLAGS += $(ev_CFLAGS)
 lobcch_CPPFLAGS += $(books_CFLAGS)
