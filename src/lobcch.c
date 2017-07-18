@@ -35,6 +35,10 @@
 
 #define strtopx		strtod64
 #define strtoqx		strtod64
+#define pxtostr		d64tostr
+#define qxtostr		d64tostr
+
+#define quantizepx	quantized64
 
 #undef EV_P
 #define EV_P  struct ev_loop *loop __attribute__((unused))
@@ -46,6 +50,13 @@ typedef struct {
 	const char *ins;
 	size_t inz;
 } xquo_t;
+
+typedef struct {
+	px_t b;
+	px_t a;
+	qx_t B;
+	qx_t A;
+} lvl_t;
 
 #define NOT_A_XQUO	((xquo_t){NOT_A_QUO})
 #define NOT_A_XQUO_P(x)	(NOT_A_QUO_P((x).q))
@@ -59,6 +70,15 @@ static book_t *book;
 static size_t nbook;
 static size_t zbook;
 static size_t nctch;
+/* the actual quotes 3U * NBOOK * NPER wide */
+static px_t *hist;
+static qx_t *hisq;
+static size_t nper = 61U;
+static size_t iper;
+
+/* no parens around X to add additive access */
+#define HIST(x)	hist[3U * nper * x]
+#define HISQ(x)	hisq[3U * nper * x]
 
 
 static __attribute__((format(printf, 1, 2))) void
@@ -77,6 +97,25 @@ serror(const char *fmt, ...)
 	return;
 }
 
+static inline size_t
+memncpy(char *restrict tgt, const char *src, size_t zrc)
+{
+	memcpy(tgt, src, zrc);
+	return zrc;
+}
+
+static void
+init_hist(size_t n)
+{
+	for (size_t i = 0U; i < 3U * nper; i += 3U) {
+		HIST(n + i) = 0.dd;
+		HISQ(n + i) = 0.dd;
+	}
+	return;
+}
+
+
+/* serialiser and deserialiser */
 static xquo_t
 recv_quo(const char *msg, size_t msz)
 {
@@ -87,7 +126,7 @@ recv_quo(const char *msg, size_t msz)
 
 	case 'A':
 		if (!memcmp(msg, "AUC\t", 4U)) {
-			goto auc;
+			break;
 		}
 	case 'B':
 		if (UNLIKELY(msg[2U] != '\t')) {
@@ -102,52 +141,60 @@ recv_quo(const char *msg, size_t msz)
 		}
 		q.s = (side_t)(msg[0U] ^ '@');
 		q.f = (typeof(q.f))(msg[1U] ^ '0');
-		q.p = strtopx(eoi, &on);
+	pq:
+		q.p = strtopx(eoi + 1U, &on);
 		if (*on++ != '\t') {
 			break;
 		}
 		q.q = strtoqx(on, &on);
 		return (xquo_t){q, ins, eoi - ins};
 
-	case 'I':
-		if (memcmp(msg, "IMB\t", 4U)) {
-			break;
-		}
-		/* snarf instrument */
-		ins = msg + 4U;
-		eoi = memchr(msg + 4U, '\t', msz - 4U);
-		msz -= eoi - msg;
-		if (UNLIKELY(eoi == NULL)) {
-			break;
-		}
-		break;
-		
 	case 'T':
-		if (memcmp(msg, "TRA\t", 4U)) {
+		/* should be a trade */
+		if (UNLIKELY(msg[3U] != '\t')) {
 			break;
 		}
-		/* snarf instrument */
 		ins = msg + 4U;
 		eoi = memchr(msg + 4U, '\t', msz - 4U);
-		msz -= eoi - msg;
 		if (UNLIKELY(eoi == NULL)) {
 			break;
 		}
-		break;
-
-	auc:
-		/* snarf instrument */
-		ins = msg + 4U;
-		eoi = memchr(msg + 4U, '\t', msz - 4U);
-		msz -= eoi - msg;
-		if (UNLIKELY(eoi == NULL)) {
-			break;
-		}
-		break;
+		q.s = SIDE_DEL;
+		goto pq;
+		
 	default:
 		break;
 	}
 	return NOT_A_XQUO;
+}
+
+static px_t
+snap_tra(px_t t, qx_t T)
+{
+	return quantizepx(t / T, t);
+}
+
+static lvl_t
+snap_top(book_t bk)
+{
+	lvl_t r = {NANPX, NANPX, 0.dd, 0.dd};
+
+	with (book_iter_t i = {.b = bk.BOOK(SIDE_BID)}) {
+		if (!book_iter_next(&i)) {
+			break;
+		}
+		r.b = i.p;
+		r.B = i.q;
+	}
+
+	with (book_iter_t i = {.b = bk.BOOK(SIDE_ASK)}) {
+		if (!book_iter_next(&i)) {
+			break;
+		}
+		r.a = i.p;
+		r.A = i.q;
+	}
+	return r;
 }
 
 
@@ -204,14 +251,28 @@ beef_cb(EV_P_ ev_io *w, int UNUSED(revents))
 			cont = realloc(cont, zbook * sizeof(*cont));
 			conx = realloc(conx, zbook * sizeof(*conx));
 			book = realloc(book, zbook * sizeof(*book));
+			hist = realloc(hist, 3U * nper * zbook * sizeof(*hist));
+			hisq = realloc(hisq, 3U * nper * zbook * sizeof(*hisq));
 		}
 		/* initialise the book */
-		cont[nbook] = strndup(q.ins, q.inz),
-			conx[nbook] = hx,
-			book[nbook] = make_book(),
-			nbook++;
+		cont[nbook] = strndup(q.ins, q.inz);
+		conx[nbook] = hx;
+		book[nbook] = make_book();
+		init_hist(nbook);
+		nbook++;
 	snap:
-		(void)book_add(book[k], q.q);
+		switch (q.q.s) {
+		case SIDE_ASK:
+		case SIDE_BID:
+			(void)book_add(book[k], q.q);
+			break;
+		case SIDE_DEL/*TRA*/:
+			HIST(k + 3U * iper) += q.q.p * q.q.q;
+			HISQ(k + 3U * iper) += q.q.q;
+			break;
+		default:
+			break;
+		}
 	}
 	/* move left-overs */
 	if (bof > npr) {
@@ -220,6 +281,23 @@ beef_cb(EV_P_ ev_io *w, int UNUSED(revents))
 	} else {
 		bof = 0U;
 	}
+	return;
+}
+
+static void
+snap_cb(EV_P_ ev_timer *UNUSED(w), int UNUSED(revents))
+{
+	for (size_t i = 0U; i < nbook; i++) {
+		lvl_t l = snap_top(book[i]);
+		px_t t = snap_tra(HIST(i + 3U * iper), HISQ(i + 3U * iper));
+
+		HIST(i + 3U * iper + SIDE_UNK) = t;
+		HIST(i + 3U * iper + SIDE_BID) = l.b;
+		HIST(i + 3U * iper + SIDE_ASK) = l.a;
+		HISQ(i + 3U * iper + SIDE_BID) = l.B;
+		HISQ(i + 3U * iper + SIDE_ASK) = l.A;
+	}
+	iper = (iper + 1U) % nper;
 	return;
 }
 
@@ -234,6 +312,7 @@ main(int argc, char *argv[])
 	static struct ipv6_mreq r[3U];
 	ev_signal sigint_watcher[1U];
 	ev_io beef[1U];
+	ev_timer snap[1U];
 	/* use the default event loop unless you have special needs */
 	struct ev_loop *loop;
 	int rc = EXIT_SUCCESS;
@@ -250,6 +329,8 @@ main(int argc, char *argv[])
 		cont = malloc(nbook * sizeof(*cont));
 		conx = malloc(nbook * sizeof(*conx));
 		book = malloc(nbook * sizeof(*book));
+		hist = malloc(3U * nper * nbook * sizeof(*hist));
+		hisq = malloc(3U * nper * nbook * sizeof(*hisq));
 
 		for (size_t i = 0U; i < nbook; i++) {
 			const char *this = argi->args[i];
@@ -263,6 +344,7 @@ main(int argc, char *argv[])
 			cont[j] = this;
 			conx[j] = hash(this, conz);
 			book[j] = make_book();
+			init_hist(j);
 			j++;
 		}
 		if (j < nbook) {
@@ -272,6 +354,7 @@ main(int argc, char *argv[])
 			cont[nbook] = nbook ? "ALL" : NULL;
 			conx[nbook] = HX_CATCHALL;
 			book[nbook] = make_book();
+			init_hist(nbook);
 			nctch = 1U;
 		}
 	} else {
@@ -280,6 +363,8 @@ main(int argc, char *argv[])
 		cont = malloc(zbook * sizeof(*cont));
 		conx = malloc(zbook * sizeof(*conx));
 		book = malloc(zbook * sizeof(*book));
+		hist = malloc(3U * nper * zbook * sizeof(*hist));
+		hisq = malloc(3U * nper * zbook * sizeof(*hisq));
 	}
 
 	/* initialise the main loop */
@@ -310,9 +395,35 @@ Error: cannot join multicast group on socket %d", s);
 		ev_io_start(EV_A_ beef);
 	}
 
+	/* intialise snapshot timer */
+	ev_timer_init(snap, snap_cb, 1.0, 1.0);
+	ev_timer_start(EV_A_ snap);
+
 	/* now wait for events to arrive */
 	ev_loop(EV_A_ 0);
 
+	for (size_t i = 0U; i < nbook + nctch; i++) {
+		puts(cont[i]);
+		for (size_t j = iper + 1U; j < nper + iper; j++) {
+			const size_t k = j % nper;
+			char buf[256U];
+			size_t len = 0U;
+
+			len += pxtostr(
+				buf + len, sizeof(buf) - len,
+				HIST(i + 3U * k + SIDE_UNK));
+			buf[len++] = ' ';
+			len += pxtostr(
+				buf + len, sizeof(buf) - len,
+				HIST(i + 3U * k + SIDE_BID));
+			buf[len++] = '/';
+			len += pxtostr(
+				buf + len, sizeof(buf) - len,
+				HIST(i + 3U * k + SIDE_ASK));
+			buf[len++] = '\n';
+			fwrite(buf, 1, len, stdout);
+		}
+	}
 
 	/* begin the freeing */
 	with (int s = beef->fd) {
@@ -320,6 +431,22 @@ Error: cannot join multicast group on socket %d", s);
 		mc6_leave_group(s, r + 0U);
 		setsock_linger(s, 1);
 		close(s);
+	}
+
+	if (nbook + nctch) {
+		for (size_t i = 0U; i < nbook + nctch; i++) {
+			book[i] = free_book(book[i]);
+		}
+		if (zbook) {
+			for (size_t i = 0U; i < nbook + nctch; i++) {
+				free(deconst(cont[i]));
+			}
+		}
+		free(cont);
+		free(conx);
+		free(book);
+		free(hist);
+		free(hisq);
 	}
 
 nop:
