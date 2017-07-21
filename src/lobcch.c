@@ -45,8 +45,6 @@
 #undef EV_P
 #define EV_P  struct ev_loop *loop __attribute__((unused))
 
-typedef long unsigned int tv_t;
-
 typedef struct {
 	quo_t q;
 	const char *ins;
