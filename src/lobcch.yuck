@@ -1,0 +1,5 @@
+Usage: lobcch [INSTR]...
+
+Cache events on unserlob channels.
+
+  -d, --daemonise       Detach from terminal.

@@ -47,6 +47,7 @@ SXE_CHECK_LIBEV
 AM_CONDITIONAL([HAVE_LIBEV], [test "${have_libev}" = "yes"])
 
 PKG_CHECK_MODULES([clob], [clob])
+PKG_CHECK_MODULES([books], [books])
 
 ## output
 AC_CONFIG_FILES([Makefile])
