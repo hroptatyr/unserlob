@@ -783,6 +783,13 @@ Error: cannot open socket");
 	ev_timer_init(snap, snap_cb, 1.0, 1.0);
 	ev_timer_start(EV_A_ snap);
 
+	if (argi->daemonise_flag && daemon(0, 0) < 0) {
+		serror("\
+Error: cannot run in daemon mode");
+		rc = 1;
+		goto beef_fre;
+	}
+
 	/* now wait for events to arrive */
 	ev_loop(EV_A_ 0);
 
