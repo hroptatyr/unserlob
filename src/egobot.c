@@ -15,6 +15,8 @@
 #define strtopx		strtod64
 #define qxtostr		d64tostr
 #define pxtostr		d64tostr
+#define isnanpx		isnand64
+#define quantizepx	quantized64
 
 #define INFQX		((_Decimal64)__builtin_inf())
 

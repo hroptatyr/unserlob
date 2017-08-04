@@ -32,6 +32,8 @@
 #define strtopx		strtod64
 #define qxtostr		d64tostr
 #define pxtostr		d64tostr
+#define NANPX		NAND64
+#define quantizeqx	quantized64
 
 #define NSECS	(1000000000)
 #define MCAST_ADDR	"ff05::134"

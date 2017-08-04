@@ -14,6 +14,8 @@
 #define qxtostr		d64tostr
 #define pxtostr		d64tostr
 
+#define quantizeqx	quantized64
+#define fabsqx		fabsd64
 #define copysignpx	copysignd64
 #define copysignqx	copysignd64
 

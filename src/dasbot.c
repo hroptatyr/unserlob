@@ -16,6 +16,7 @@
 #define qxtostr		d64tostr
 #define pxtostr		d64tostr
 
+#define quantizepx	quantized64
 #define floorpx		floord64
 
 struct quo_s {

@@ -43,8 +43,10 @@
 #define qxtostr		d64tostr
 #define pxtostr		d64tostr
 
-#define INFQX		((_Decimal64)__builtin_inf())
+#define INFQX		INFD64
 #define fabsqx		fabsd64
+#define quantizepx	quantized64
+#define isnanpx		isnand64
 
 struct vwap_s {
 	qx_t vprc;

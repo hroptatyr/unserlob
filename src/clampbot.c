@@ -14,6 +14,8 @@
 #define strtopx		strtod64
 #define qxtostr		d64tostr
 #define pxtostr		d64tostr
+#define isnanpx		isnand64
+#define NANPX		NAND64
 
 static quos_msg_t cquo[2U][NCLOB_SIDES];
 static qx_t Q = 400.dd;

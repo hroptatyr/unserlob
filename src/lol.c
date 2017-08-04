@@ -10,6 +10,8 @@
 #include "lol.h"
 #include "nifty.h"
 
+#define NANPX		NAND64
+
 #define strtopx		strtod64
 #define pxtostr		d64tostr
 #define strtoqx		strtod64

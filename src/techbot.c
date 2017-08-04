@@ -18,10 +18,9 @@
 #define qxtostr		d64tostr
 #define pxtostr		d64tostr
 
-#undef INFQX
-#define INFQX		((_Decimal64)__builtin_inf())
-#undef NANQX
-#define NANQX		((_Decimal64)__builtin_nan(""))
+#define INFQX		INFD64
+#define NANPX		NAND64
+#define fabsqx		fabsd64
 
 static qx_t maxq = INFQX;
 static qx_t basq = 100.dd;
