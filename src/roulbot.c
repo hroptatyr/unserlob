@@ -18,10 +18,10 @@
 #define copysignqx	copysignd64
 
 static qty_t Q = {1.dd, 0.dd};
-static clob_side_t dir = NSIDES;
+static clob_side_t dir = NCLOB_SIDES;
 static unsigned int pingpongp;
 
-static clob_oid_t coid[NSIDES];
+static clob_oid_t coid[NCLOB_SIDES];
 static unxs_exa_t acc = {0.dd, 0.dd};
 static qx_t pnl = 0.dd;
 static px_t tabs;
@@ -46,15 +46,15 @@ ochan_cb(bot_t b, omsg_t m)
 	case OMSG_ACC:
 		acc = m.exa;
 		/* cancel any outstanding orders */
-		add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[SIDE_BID]});
-		add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[SIDE_ASK]});
+		add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[CLOB_SIDE_BID]});
+		add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[CLOB_SIDE_ASK]});
 
 		/* store pnl if we're flat */
 		if (acc.base == 0.dd) {
 			pnl = acc.term;
 			if (pingpongp) {
 				/* just keep on going, opposite direction now */
-				clob_ord_t o = {TYPE_MKT, dir ^= 1, Q};
+				clob_ord_t o = {CLOB_TYPE_MKT, dir ^= 1, Q};
 				add_omsg(b, (omsg_t){OMSG_ORD, INS, .ord = o});
 			}
 			goto send;
@@ -74,12 +74,12 @@ ochan_cb(bot_t b, omsg_t m)
 		/* put bracket order */
 		const qx_t babs = fabsqx(acc.base);
 		clob_ord_t tak = {
-			TYPE_LMT, (acc.base < 0.dd),
+			CLOB_TYPE_LMT, (acc.base < 0.dd),
 			.qty = {Q.dis, babs + Q.hid - Q.dis},
 			.lmt = mean + labs
 		};
 		clob_ord_t mor = {
-			TYPE_LMT, (acc.base > 0.dd),
+			CLOB_TYPE_LMT, (acc.base > 0.dd),
 			.qty = {Q.dis, babs + Q.hid},
 			.lmt = mean - labs
 		};
@@ -105,7 +105,7 @@ hbeat_cb(bot_t b)
 		/* there should be a bracket out there already */
 		return;
 	}
-	add_omsg(b, (omsg_t){OMSG_ORD, INS, .ord = {TYPE_MKT, dir, Q}});
+	add_omsg(b, (omsg_t){OMSG_ORD, INS, .ord = {CLOB_TYPE_MKT, dir, Q}});
 	bot_send(b);
 	return;
 }
@@ -148,9 +148,9 @@ Error: need a target, how about --target=10%?\n", stderr);
 		tabs = strtopx(argi->target_arg, &on);
 
 		if (tabs < 0.dd) {
-			dir = SIDE_SHORT;
+			dir = CLOB_SIDE_SHORT;
 		} else if (tabs > 0.dd) {
-			dir = SIDE_LONG;
+			dir = CLOB_SIDE_LONG;
 		} else {
 			goto inv;
 		}

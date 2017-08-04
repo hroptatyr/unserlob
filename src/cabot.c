@@ -170,8 +170,8 @@ prnt_lvl2(int s, size_t ins)
 	size_t len = 0U;
 
 	/* market orders first */
-	qx_t mb = plqu_sum(clob[ins].mkt[SIDE_BID]);
-	qx_t ma = plqu_sum(clob[ins].mkt[SIDE_ASK]);
+	qx_t mb = plqu_sum(clob[ins].mkt[CLOB_SIDE_BID]);
+	qx_t ma = plqu_sum(clob[ins].mkt[CLOB_SIDE_ASK]);
 
 	const size_t thisz = instz[ins + 1U] - instz[ins + 0U];
 	len += (memcpy(buf, instr + instz[ins], thisz), thisz);
@@ -185,8 +185,8 @@ prnt_lvl2(int s, size_t ins)
 	buf[len++] = '\n';
 
 	/* now for limits */
-	btree_iter_t bi = {clob[ins].lmt[SIDE_BID]};
-	btree_iter_t ai = {clob[ins].lmt[SIDE_ASK]};
+	btree_iter_t bi = {clob[ins].lmt[CLOB_SIDE_BID]};
+	btree_iter_t ai = {clob[ins].lmt[CLOB_SIDE_ASK]};
 
 	while (len < sizeof(buf)) {
 		bool bp, ap;
@@ -298,8 +298,8 @@ omsg_add_ord(int fd, size_t i, clob_ord_t o, const uid_t u)
 	clob_oid_t oi;
 
 	switch (o.typ) {
-	case TYPE_MKT:
-	case TYPE_LMT:
+	case CLOB_TYPE_MKT:
+	case CLOB_TYPE_LMT:
 		break;
 	default:
 		/* it's just rubbish */
@@ -355,7 +355,7 @@ diss_exe(unxs_t exe, size_t ins)
 	}
 	for (size_t i = 0U; i < exe->n; i++) {
 		SEND_QMSG(quot_chan, QMSG_TRA, INS(ins),
-			  .quo = {NSIDES, exe->x[i].prc, exe->x[i].qty});
+			  .quo = {NCLOB_SIDES, exe->x[i].prc, exe->x[i].qty});
 	}
 	unxs_clr(exe);
 	return;

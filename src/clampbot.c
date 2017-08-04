@@ -15,7 +15,7 @@
 #define qxtostr		d64tostr
 #define pxtostr		d64tostr
 
-static quos_msg_t cquo[2U][NSIDES];
+static quos_msg_t cquo[2U][NCLOB_SIDES];
 static qx_t Q = 400.dd;
 
 static px_t dif;
@@ -49,12 +49,12 @@ qchan_cb(bot_t b, qmsg_t m)
 			/* don't track NANs */
 			break;
 		} else if (!memcmp(m.ins, cont[0U], conz[0U])) {
-			quos_msg_t q = {NSIDES, m.auc.prc, m.auc.qty};
-			cquo[0U][SIDE_ASK] = cquo[0U][SIDE_BID] = q;
+			quos_msg_t q = {NCLOB_SIDES, m.auc.prc, m.auc.qty};
+			cquo[0U][CLOB_SIDE_ASK] = cquo[0U][CLOB_SIDE_BID] = q;
 			break;
 		} else if (!memcmp(m.ins, cont[1U], conz[1U])) {
-			quos_msg_t q = {NSIDES, m.auc.prc, m.auc.qty};
-			cquo[1U][SIDE_ASK] = cquo[1U][SIDE_BID] = q;
+			quos_msg_t q = {NCLOB_SIDES, m.auc.prc, m.auc.qty};
+			cquo[1U][CLOB_SIDE_ASK] = cquo[1U][CLOB_SIDE_BID] = q;
 			break;
 		}
 		return;
@@ -65,30 +65,30 @@ qchan_cb(bot_t b, qmsg_t m)
 	/* check opportunities */
 	if (0) {
 		;
-	} else if (cquo[0U][SIDE_ASK].prc - cquo[1U][SIDE_BID].prc < dif ||
-		   cquo[0U][SIDE_ASK].prc / cquo[1U][SIDE_BID].prc < quo) {
-		qx_t q = min(Q, min(cquo[0U][SIDE_ASK].new, cquo[1U][SIDE_BID].new));
+	} else if (cquo[0U][CLOB_SIDE_ASK].prc - cquo[1U][CLOB_SIDE_BID].prc < dif ||
+		   cquo[0U][CLOB_SIDE_ASK].prc / cquo[1U][CLOB_SIDE_BID].prc < quo) {
+		qx_t q = min(Q, min(cquo[0U][CLOB_SIDE_ASK].new, cquo[1U][CLOB_SIDE_BID].new));
 		if (q <= 0.dd) {
 			/* not enough size */
 			return;
 		}
 		/* go long C0/C1-spread */
 		m0.typ = OMSG_ORD;
-		m0.ord = (clob_ord_t){TYPE_MKT, SIDE_LONG, .qty = {q, 0.dd}};
+		m0.ord = (clob_ord_t){CLOB_TYPE_MKT, CLOB_SIDE_LONG, .qty = {q, 0.dd}};
 		m1.typ = OMSG_ORD;
-		m1.ord = (clob_ord_t){TYPE_MKT, SIDE_SHORT, .qty = {q, 0.dd}};
-	} else if (cquo[0U][SIDE_BID].prc - cquo[1U][SIDE_ASK].prc > dif ||
-		   cquo[0U][SIDE_BID].prc / cquo[1U][SIDE_ASK].prc > quo) {
-		qx_t q = min(Q, min(cquo[0U][SIDE_BID].new, cquo[1U][SIDE_ASK].new));
+		m1.ord = (clob_ord_t){CLOB_TYPE_MKT, CLOB_SIDE_SHORT, .qty = {q, 0.dd}};
+	} else if (cquo[0U][CLOB_SIDE_BID].prc - cquo[1U][CLOB_SIDE_ASK].prc > dif ||
+		   cquo[0U][CLOB_SIDE_BID].prc / cquo[1U][CLOB_SIDE_ASK].prc > quo) {
+		qx_t q = min(Q, min(cquo[0U][CLOB_SIDE_BID].new, cquo[1U][CLOB_SIDE_ASK].new));
 		if (q <= 0.dd) {
 			/* not enough size */
 			return;
 		}
 		/* go short C0/C1-spread */
 		m0.typ = OMSG_ORD;
-		m0.ord = (clob_ord_t){TYPE_MKT, SIDE_SHORT, .qty = {q, 0.dd}};
+		m0.ord = (clob_ord_t){CLOB_TYPE_MKT, CLOB_SIDE_SHORT, .qty = {q, 0.dd}};
 		m1.typ = OMSG_ORD;
-		m1.ord = (clob_ord_t){TYPE_MKT, SIDE_LONG, .qty = {q, 0.dd}};
+		m1.ord = (clob_ord_t){CLOB_TYPE_MKT, CLOB_SIDE_LONG, .qty = {q, 0.dd}};
 	} else {
 		/* nope, no opportunities today */
 		return;
@@ -153,10 +153,10 @@ Error: need a difference or quotient spread.\n", stderr);
 		host = argi->host_arg;
 	}
 
-	cquo[0U][SIDE_BID].prc = NANPX;
-	cquo[0U][SIDE_ASK].prc = NANPX;
-	cquo[1U][SIDE_BID].prc = NANPX;
-	cquo[1U][SIDE_ASK].prc = NANPX;
+	cquo[0U][CLOB_SIDE_BID].prc = NANPX;
+	cquo[0U][CLOB_SIDE_ASK].prc = NANPX;
+	cquo[1U][CLOB_SIDE_BID].prc = NANPX;
+	cquo[1U][CLOB_SIDE_ASK].prc = NANPX;
 
 	/* initialise the bot */
 	if (UNLIKELY((b = make_bot(host)) == NULL)) {

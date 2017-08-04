@@ -78,13 +78,13 @@ trend_cb(bot_t b)
 	if (new > old && vol >= basq && nlong++ < 10U) {
 		/* support the uptrend */
 		qx_t q = min(maxq - acc.base, basq);
-		m.ord = (clob_ord_t){TYPE_MKT, SIDE_LONG, {q, 0.dd}};
+		m.ord = (clob_ord_t){CLOB_TYPE_MKT, CLOB_SIDE_LONG, {q, 0.dd}};
 		add_omsg(b, m);
 		nshort = 0U;
 	} else if (new < old && vol >= basq && nshort++ < 10U) {
 		/* support the downtrend */
 		qx_t q = min(maxq + acc.base, basq);
-		m.ord = (clob_ord_t){TYPE_MKT, SIDE_SHORT, {q, 0.dd}};
+		m.ord = (clob_ord_t){CLOB_TYPE_MKT, CLOB_SIDE_SHORT, {q, 0.dd}};
 		add_omsg(b, m);
 		nlong = 0U;
 	}
@@ -109,13 +109,13 @@ contr_cb(bot_t b)
 	if (new > old && vol >= basq && nlong++ < 10U) {
 		/* bet against uptrend */
 		qx_t q = min(maxq + acc.base, basq);
-		m.ord = (clob_ord_t){TYPE_MKT, SIDE_SHORT, {q, 0.dd}};
+		m.ord = (clob_ord_t){CLOB_TYPE_MKT, CLOB_SIDE_SHORT, {q, 0.dd}};
 		add_omsg(b, m);
 		nshort = 0U;
 	} else if (new < old && vol >= basq && nshort++ < 10U) {
 		/* bet against downtrend */
 		qx_t q = min(maxq - acc.base, basq);
-		m.ord = (clob_ord_t){TYPE_MKT, SIDE_LONG, {q, 0.dd}};
+		m.ord = (clob_ord_t){CLOB_TYPE_MKT, CLOB_SIDE_LONG, {q, 0.dd}};
 		add_omsg(b, m);
 		nlong = 0U;
 	}

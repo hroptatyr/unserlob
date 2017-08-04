@@ -26,8 +26,8 @@ static px_t sprd = 0.02dd;
 static qx_t maxq = INFQX;
 static qty_t Q = {500.dd, 500.dd};
 
-static clob_oid_t coid[NSIDES];
-static quos_msg_t cquo[NSIDES];
+static clob_oid_t coid[NCLOB_SIDES];
+static quos_msg_t cquo[NCLOB_SIDES];
 static unxs_exa_t acc = {0.dd, 0.dd};
 
 static const char *cont;
@@ -111,7 +111,7 @@ qchan_cb(bot_t UNUSED(b), qmsg_t m)
 		}
 		cquo[m.quo.sid] = m.quo;
 		/* calc mktv as well */
-		mktv = (cquo[SIDE_ASK].prc + cquo[SIDE_BID].prc) / 2.dd;
+		mktv = (cquo[CLOB_SIDE_ASK].prc + cquo[CLOB_SIDE_BID].prc) / 2.dd;
 		break;
 	case QMSG_AUC:
 		if (!isnanpx(m.auc.prc)) {
@@ -148,8 +148,8 @@ hbeat_cb(bot_t b)
 	qty_t q;
 
 	/* cancel old guys */
-	add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[SIDE_BID]});
-	add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[SIDE_ASK]});
+	add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[CLOB_SIDE_BID]});
+	add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[CLOB_SIDE_ASK]});
 
 	v = quantizepx(truv(), sprd);
 	q = minq(Q, maxq - acc.base);
@@ -157,7 +157,7 @@ hbeat_cb(bot_t b)
 		/* split q up in displayed and hidden */
 		omsg_t m = {
 			OMSG_ORD, INS,
-			.ord = (clob_ord_t){TYPE_LMT, SIDE_LONG,
+			.ord = (clob_ord_t){CLOB_TYPE_LMT, CLOB_SIDE_LONG,
 					    .qty = q,
 					    .lmt = v - sprd / 2.dd}
 		};
@@ -167,7 +167,7 @@ hbeat_cb(bot_t b)
 	if (qty(q) > 0.dd) {
 		omsg_t m = {
 			OMSG_ORD, INS,
-			.ord = (clob_ord_t){TYPE_LMT, SIDE_SHORT,
+			.ord = (clob_ord_t){CLOB_TYPE_LMT, CLOB_SIDE_SHORT,
 					    .qty = q,
 					    .lmt = v + sprd / 2.dd}
 		};

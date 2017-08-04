@@ -89,11 +89,11 @@ hbeat_cb(bot_t b)
 			if (spos ^ s) {
 				omsg_t m = {OMSG_ORD, INS};
 				clob_side_t x = (s ^ contrarianp)
-					? SIDE_SHORT : SIDE_LONG;
+					? CLOB_SIDE_SHORT : CLOB_SIDE_LONG;
 				qx_t q = fabsqx(acc.base);
 
 				q = min(maxq - q, q + basq);
-				m.ord = (clob_ord_t){TYPE_MKT, x, {q, 0.dd}};
+				m.ord = (clob_ord_t){CLOB_TYPE_MKT, x, {q, 0.dd}};
 				add_omsg(b, m);
 				bot_send(b);
 				spos = s;

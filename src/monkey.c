@@ -70,15 +70,15 @@ hbeat_cb(bot_t b)
 	}
 
 	if (q > 0.dd && acc.base + q <= maxq) {
-		s = SIDE_LONG;
+		s = CLOB_SIDE_LONG;
 	} else if (q < 0.dd && -acc.base - q <= maxq) {
-		s = SIDE_SHORT;
+		s = CLOB_SIDE_SHORT;
 		q = -q;
 	} else {
 		/* not today then */
 		return;
 	}
-	m.ord = (clob_ord_t){TYPE_MKT, s, .qty = {q, 0.dd}};
+	m.ord = (clob_ord_t){CLOB_TYPE_MKT, s, .qty = {q, 0.dd}};
 	add_omsg(b, m);
 	bot_send(b);
 	return;

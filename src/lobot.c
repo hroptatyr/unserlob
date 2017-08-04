@@ -183,8 +183,8 @@ prnt_lvl2(int s, size_t ins)
 	size_t len = 0U;
 
 	/* market orders first */
-	qx_t mb = plqu_sum(clob[ins].mkt[SIDE_BID]);
-	qx_t ma = plqu_sum(clob[ins].mkt[SIDE_ASK]);
+	qx_t mb = plqu_sum(clob[ins].mkt[CLOB_SIDE_BID]);
+	qx_t ma = plqu_sum(clob[ins].mkt[CLOB_SIDE_ASK]);
 
 	const size_t thisz = instz[ins + 1U] - instz[ins + 0U];
 	len += (memcpy(buf, instr + instz[ins], thisz), thisz);
@@ -198,8 +198,8 @@ prnt_lvl2(int s, size_t ins)
 	buf[len++] = '\n';
 
 	/* now for limits */
-	btree_iter_t bi = {clob[ins].lmt[SIDE_BID]};
-	btree_iter_t ai = {clob[ins].lmt[SIDE_ASK]};
+	btree_iter_t bi = {clob[ins].lmt[CLOB_SIDE_BID]};
+	btree_iter_t ai = {clob[ins].lmt[CLOB_SIDE_ASK]};
 
 	while (len < sizeof(buf)) {
 		bool bp, ap;
@@ -291,23 +291,23 @@ static void
 chck_book(void)
 {
 	for (size_t j = 0U; j < NINSTR; j++) {
-		qx_t mb = plqu_sum(clob[j].mkt[SIDE_BID]);
-		qx_t ma = plqu_sum(clob[j].mkt[SIDE_ASK]);
+		qx_t mb = plqu_sum(clob[j].mkt[CLOB_SIDE_BID]);
+		qx_t ma = plqu_sum(clob[j].mkt[CLOB_SIDE_ASK]);
 
 		if (mb > 0.dd) {
-			btree_iter_t ai = {clob[j].lmt[SIDE_ASK]};
+			btree_iter_t ai = {clob[j].lmt[CLOB_SIDE_ASK]};
 			assert(!btree_iter_next(&ai));
 		}
 		if (ma > 0.dd) {
-			btree_iter_t bi = {clob[j].lmt[SIDE_BID]};
+			btree_iter_t bi = {clob[j].lmt[CLOB_SIDE_BID]};
 			assert(!btree_iter_next(&bi));
 		}
-		for (btree_iter_t ai = {clob[j].lmt[SIDE_ASK]};
+		for (btree_iter_t ai = {clob[j].lmt[CLOB_SIDE_ASK]};
 		     btree_iter_next(&ai);) {
 			assert(ai.v->sum.dis >= 0.dd);
 			assert(ai.v->sum.hid >= 0.dd);
 		}
-		for (btree_iter_t bi = {clob[j].lmt[SIDE_BID]};
+		for (btree_iter_t bi = {clob[j].lmt[CLOB_SIDE_BID]};
 		     btree_iter_next(&bi);) {
 			assert(bi.v->sum.dis >= 0.dd);
 			assert(bi.v->sum.hid >= 0.dd);
@@ -340,8 +340,8 @@ omsg_add_ord(int fd, size_t i, clob_ord_t o, const uid_t u)
 	clob_oid_t oi;
 
 	switch (o.typ) {
-	case TYPE_MKT:
-	case TYPE_LMT:
+	case CLOB_TYPE_MKT:
+	case CLOB_TYPE_LMT:
 		break;
 	default:
 		/* it's just rubbish */
@@ -373,8 +373,8 @@ diss_exe(unxs_t exe, size_t ins)
 
 	for (size_t i = 0U; i < exe->n; i++) {
 		/* let the market participants know before anyone else */
-		const clob_oid_t so = exe->o[MODE_BI * i + SIDE_MAKER];
-		const clob_oid_t co = exe->o[MODE_BI * i + SIDE_TAKER];
+		const clob_oid_t so = exe->o[MODE_BI * i + CLOB_SIDE_MAKER];
+		const clob_oid_t co = exe->o[MODE_BI * i + CLOB_SIDE_TAKER];
 		const clob_side_t ss = (clob_side_t)exe->s[i];
 		const clob_side_t cs = clob_contra_side(ss);
 		unxs_exa_t sa = add_acct(so.user, ins, unxs_exa(exe->x[i], ss));
@@ -419,7 +419,7 @@ diss_exe(unxs_t exe, size_t ins)
 	}
 	for (size_t i = 0U; i < exe->n; i++) {
 		SEND_QMSG(quot_chan, QMSG_TRA, INS(ins),
-			  .quo = {NSIDES, exe->x[i].prc, exe->x[i].qty});
+			  .quo = {NCLOB_SIDES, exe->x[i].prc, exe->x[i].qty});
 	}
 	unxs_clr(exe);
 	return;
@@ -436,19 +436,19 @@ diss_quo(quos_t q, size_t ins)
 		btree_val_t *v;
 		quos_msg_t t;
 
-		v = find_top(clob[ins].lmt[SIDE_ASK], &k);
+		v = find_top(clob[ins].lmt[CLOB_SIDE_ASK], &k);
 		if (LIKELY(v != NULL)) {
-			t = (quos_msg_t){SIDE_ASK, k, v->sum.dis};
+			t = (quos_msg_t){CLOB_SIDE_ASK, k, v->sum.dis};
 		} else {
-			t = (quos_msg_t){SIDE_ASK, NANPX, 0.dd};
+			t = (quos_msg_t){CLOB_SIDE_ASK, NANPX, 0.dd};
 		}
 		SEND_QMSG(quot_chan, QMSG_TOP, INS(ins), .quo = t);
 
-		v = find_top(clob[ins].lmt[SIDE_BID], &k);
+		v = find_top(clob[ins].lmt[CLOB_SIDE_BID], &k);
 		if (LIKELY(v != NULL)) {
-			t = (quos_msg_t){SIDE_BID, k, v->sum.dis};
+			t = (quos_msg_t){CLOB_SIDE_BID, k, v->sum.dis};
 		} else {
-			t = (quos_msg_t){SIDE_BID, NANPX, 0.dd};
+			t = (quos_msg_t){CLOB_SIDE_BID, NANPX, 0.dd};
 		}
 		SEND_QMSG(quot_chan, QMSG_TOP, INS(ins), .quo = t);
 	}

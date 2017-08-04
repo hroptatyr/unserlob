@@ -36,7 +36,7 @@ static qx_t quo_size = 500.dd;
 static qx_t max_pos = 1000000.dd;
 static double(*calc_qt)(double);
 
-static clob_oid_t coid[NSIDES];
+static clob_oid_t coid[NCLOB_SIDES];
 
 static struct quo_s quo = {-1.dd, 1.dd};
 static struct acc_s acc = {0.dd, 0.dd};
@@ -233,19 +233,19 @@ hbeat_cb(bot_t b)
 {
 /* generate a random trade */
 	/* cancel old guys */
-	add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[SIDE_BID]});
-	add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[SIDE_ASK]});
+	add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[CLOB_SIDE_BID]});
+	add_omsg(b, (omsg_t){OMSG_CAN, INS, .oid = coid[CLOB_SIDE_ASK]});
 	/* recalc quo if there hasn't been a trade */
 	if (!tra) {
 		quo = mm(0);
 	}
 
 	add_omsg(b, (omsg_t){OMSG_ORD, INS,
-				 .ord = (clob_ord_t){TYPE_LMT, SIDE_LONG,
+				 .ord = (clob_ord_t){CLOB_TYPE_LMT, CLOB_SIDE_LONG,
 						     .qty = {quo_size, 0.dd},
 						     .lmt = quo.b}});
 	add_omsg(b, (omsg_t){OMSG_ORD, INS,
-				 .ord = (clob_ord_t){TYPE_LMT, SIDE_SHORT,
+				 .ord = (clob_ord_t){CLOB_TYPE_LMT, CLOB_SIDE_SHORT,
 						     .qty = {quo_size, 0.dd},
 						     .lmt = quo.a}});
 	bot_send(b);

@@ -49,8 +49,8 @@ _send_oid(char *restrict buf, size_t bsz, clob_oid_t oid)
 {
 	static const char *sids[] = {"ASK ", "BID "};
 	static const char *typs[] = {
-		[TYPE_LMT] = "LMT ",
-		[TYPE_MKT] = "MKT ",
+		[CLOB_TYPE_LMT] = "LMT ",
+		[CLOB_TYPE_MKT] = "MKT ",
 	};
 	size_t len = 0U;
 
@@ -70,10 +70,10 @@ _recv_oid(const char *msg, size_t UNUSED(msz))
 
 	switch (msg[0U]) {
 	case 'L':
-		r.typ = TYPE_LMT;
+		r.typ = CLOB_TYPE_LMT;
 		break;
 	case 'M':
-		r.typ = TYPE_MKT;
+		r.typ = CLOB_TYPE_MKT;
 		break;
 	default:
 		goto nil;
@@ -102,7 +102,7 @@ _send_ord(char *restrict buf, size_t bsz, clob_ord_t ord)
 		buf[len++] = '+';
 		len += qxtostr(buf + len, bsz - len, ord.qty.hid);
 	}
-	if (ord.typ == TYPE_LMT) {
+	if (ord.typ == CLOB_TYPE_LMT) {
 		buf[len++] = '\t';
 		len += pxtostr(buf + len, bsz - len, ord.lmt);
 	}
@@ -113,15 +113,15 @@ _send_ord(char *restrict buf, size_t bsz, clob_ord_t ord)
 static clob_ord_t
 _recv_ord(const char *msg, const char *ord, size_t UNUSED(msz))
 {
-	clob_ord_t r = {TYPE_MKT};
+	clob_ord_t r = {CLOB_TYPE_MKT};
 	char *on;
 
 	switch (*msg) {
 	case 'B':
-		r.sid = SIDE_LONG;
+		r.sid = CLOB_SIDE_LONG;
 		break;
 	case 'S':
-		r.sid = SIDE_SHORT;
+		r.sid = CLOB_SIDE_SHORT;
 		break;
 	}
 
@@ -135,7 +135,7 @@ _recv_ord(const char *msg, const char *ord, size_t UNUSED(msz))
 	if (*on++ == '\t') {
 		/* got limit prices as well */
 		r.lmt = strtopx(on, &on);
-		r.typ = TYPE_LMT;
+		r.typ = CLOB_TYPE_LMT;
 	}
 	return r;
 }
@@ -208,7 +208,7 @@ nil:
 static quos_msg_t
 _recv_tra(const char *msg, size_t UNUSED(msz))
 {
-	quos_msg_t r = {NSIDES};
+	quos_msg_t r = {NCLOB_SIDES};
 	char *on;
 
 	r.prc = strtopx(msg, &on);
@@ -218,7 +218,7 @@ _recv_tra(const char *msg, size_t UNUSED(msz))
 	r.new = strtoqx(on, &on);
 	return r;
 nil:
-	return (quos_msg_t){NSIDES, NANPX, 0.dd};
+	return (quos_msg_t){NCLOB_SIDES, NANPX, 0.dd};
 }
 
 static mmod_auc_t
@@ -370,8 +370,8 @@ send_qmsg(char *restrict buf, size_t bsz, qmsg_t msg)
 	case QMSG_TOP:
 	case QMSG_LVL:
 		switch (msg.quo.sid) {
-		case SIDE_ASK:
-		case SIDE_BID:
+		case CLOB_SIDE_ASK:
+		case CLOB_SIDE_BID:
 			buf[len++] = (char)(msg.quo.sid + 'A');
 			buf[len++] = (char)(msg.typ ^ '0');
 			buf[len++] = '\t';

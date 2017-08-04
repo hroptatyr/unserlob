@@ -48,7 +48,7 @@
 
 struct vwap_s {
 	qx_t vprc;
-	qx_t vqty[NSIDES];
+	qx_t vqty[NCLOB_SIDES];
 };
 
 static size_t nlvl = 1U;
@@ -122,7 +122,7 @@ ochan_cb(bot_t UNUSED(b), omsg_t m)
 static void
 hbeat_cb(bot_t b)
 {
-	clob_ord_t o = {TYPE_LMT, .qty = Q};
+	clob_ord_t o = {CLOB_TYPE_LMT, .qty = Q};
 
 	/* cancel everything */
 	for (size_t i = 0U; i < noid; i++) {
@@ -190,13 +190,13 @@ hbeat_cb(bot_t b)
 			sq = (qx_t)maxs * (fabsqx(bb) + sq);
 		}
 
-		o.sid = SIDE_ASK;
+		o.sid = CLOB_SIDE_ASK;
 		o.lmt = quantizepx((px_t)(bb + sq), mint);
 		o.qty = _maxq(Q, aq, maxq + acc.base);
 		add_omsg(b, (omsg_t){OMSG_ORD, INS, .ord = o});
 		aq = qty_add(aq, o.qty);
 
-		o.sid = SIDE_BID;
+		o.sid = CLOB_SIDE_BID;
 		o.lmt = quantizepx((px_t)(bb - sq), mint);
 		o.qty = _maxq(Q, bq, maxq - acc.base);
 		add_omsg(b, (omsg_t){OMSG_ORD, INS, .ord = o});
@@ -306,8 +306,8 @@ Error: argument to levels must be positive.\n", stderr);
 		}
 	}
 	/* prep coids */
-	coid = calloc(NSIDES * nlvl, sizeof(*coid));
-	totq = (qx_t)nlvl * qty(Q) * (qx_t)NSIDES;
+	coid = calloc(NCLOB_SIDES * nlvl, sizeof(*coid));
+	totq = (qx_t)nlvl * qty(Q) * (qx_t)NCLOB_SIDES;
 	mins = (qx_t)mint / qty(Q);
 	bs = mint;
 	(void)totq;
