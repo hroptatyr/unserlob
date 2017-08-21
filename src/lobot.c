@@ -339,8 +339,6 @@ chck_acct(void)
 static void
 omsg_add_ord(int fd, size_t i, clob_ord_t o, const uid_t u)
 {
-	clob_oid_t oi;
-
 	switch (o.typ) {
 	case CLOB_TYPE_MKT:
 	case CLOB_TYPE_LMT:
@@ -352,9 +350,11 @@ omsg_add_ord(int fd, size_t i, clob_ord_t o, const uid_t u)
 	/* stick uid into orderbook */
 	o.user = u;
 	/* continuous trading */
-	oi = unxs_order(clob[i], o, NANPX);
-	/* let him know about the residual order */
-	if (oi.qid) {
+	o = unxs_order(clob[i], o, NANPX);
+	if (o.qty.dis + o.qty.hid > 0.dd) {
+		clob_oid_t oi = clob_add(clob[i], o);
+
+		/* let him know about the residual order */
 		SEND_OMSG(fd, OMSG_OID, INS(i), .oid = oi);
 	}
 	return;
