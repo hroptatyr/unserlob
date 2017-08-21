@@ -138,6 +138,8 @@ _recv_ord(const char *msg, const char *ord, size_t UNUSED(msz))
 		/* got limit prices as well */
 		r.lmt = strtopx(on, &on);
 		r.typ = CLOB_TYPE_LMT;
+	} else {
+		r.slp = NANPX;
 	}
 	return r;
 }
