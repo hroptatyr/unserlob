@@ -20,9 +20,6 @@
 #include "clob/unxs.h"
 #include "clob/quos.h"
 #include "clob/mmod-auction.h"
-/* we need book internals */
-#include "clob/plqu.h"
-#include "clob/btree.h"
 #include "sock.h"
 #include "lol.h"
 #include "hash.h"
@@ -70,18 +67,6 @@ serror(const char *fmt, ...)
 	}
 	fputc('\n', stderr);
 	return;
-}
-
-static qx_t
-plqu_sum(plqu_t q)
-{
-/* sum up displayed quantities */
-	qx_t sum = 0.dd;
-	for (plqu_iter_t i = {.q = q}; plqu_iter_next(&i);) {
-		sum += i.v.qty.dis;
-		sum += i.v.qty.hid;
-	}
-	return sum;
 }
 
 
@@ -169,10 +154,18 @@ prnt_lvl2(int s, size_t ins)
 {
 	char buf[4096U];
 	size_t len = 0U;
+	qx_t mb = 0.dd, ma = 0.dd;
+	clob_aggiter_t bi, ai;
 
 	/* market orders first */
-	qx_t mb = plqu_sum(clob[ins].mkt[CLOB_SIDE_BID]);
-	qx_t ma = plqu_sum(clob[ins].mkt[CLOB_SIDE_ASK]);
+	for (bi = clob_aggiter(clob[ins], CLOB_TYPE_MKT, CLOB_SIDE_BID);
+	     clob_aggiter_next(&bi);) {
+		mb = bi.q.dis + bi.q.hid;
+	}
+	for (ai = clob_aggiter(clob[ins], CLOB_TYPE_MKT, CLOB_SIDE_ASK);
+	     clob_aggiter_next(&ai);) {
+		ma = ai.q.dis + ai.q.hid;
+	}
 
 	const size_t thisz = instz[ins + 1U] - instz[ins + 0U];
 	len += (memcpy(buf, instr + instz[ins], thisz), thisz);
@@ -186,14 +179,14 @@ prnt_lvl2(int s, size_t ins)
 	buf[len++] = '\n';
 
 	/* now for limits */
-	btree_iter_t bi = {clob[ins].lmt[CLOB_SIDE_BID]};
-	btree_iter_t ai = {clob[ins].lmt[CLOB_SIDE_ASK]};
+	bi = clob_aggiter(clob[ins], CLOB_TYPE_LMT, CLOB_SIDE_BID);
+	ai = clob_aggiter(clob[ins], CLOB_TYPE_LMT, CLOB_SIDE_ASK);
 
 	while (len < sizeof(buf)) {
 		bool bp, ap;
 
-		bp = btree_iter_next(&bi);
-		ap = btree_iter_next(&ai);
+		bp = clob_aggiter_next(&bi);
+		ap = clob_aggiter_next(&ai);
 
 		if (UNLIKELY(!bp && !ap)) {
 			break;
@@ -205,31 +198,31 @@ prnt_lvl2(int s, size_t ins)
 
 		buf[len++] = '\t';
 		if (bp) {
-			len += pxtostr(buf + len, sizeof(buf) - len, bi.k);
+			len += pxtostr(buf + len, sizeof(buf) - len, bi.p);
 		}
 		buf[len++] = '\t';
 		if (ap) {
-			len += pxtostr(buf + len, sizeof(buf) - len, ai.k);
+			len += pxtostr(buf + len, sizeof(buf) - len, ai.p);
 		}
 		buf[len++] = '\t';
 		if (bp) {
 			len += qxtostr(
-				buf + len, sizeof(buf) - len, bi.v->sum.dis);
+				buf + len, sizeof(buf) - len, bi.q.dis);
 		}
 		buf[len++] = '\t';
 		if (ap) {
 			len += qxtostr(
-				buf + len, sizeof(buf) - len, ai.v->sum.dis);
+				buf + len, sizeof(buf) - len, ai.q.dis);
 		}
 		buf[len++] = '\t';
 		if (bp) {
 			len += qxtostr(
-				buf + len, sizeof(buf) - len, bi.v->sum.hid);
+				buf + len, sizeof(buf) - len, bi.q.hid);
 		}
 		buf[len++] = '\t';
 		if (ap) {
 			len += qxtostr(
-				buf + len, sizeof(buf) - len, ai.v->sum.hid);
+				buf + len, sizeof(buf) - len, ai.q.hid);
 		}
 		buf[len++] = '\n';
 	}
