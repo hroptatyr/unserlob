@@ -20,9 +20,6 @@
 #include "clob/unxs.h"
 #include "clob/quos.h"
 #include "clob/mmod-auction.h"
-/* we need book internals */
-#include "clob/plqu.h"
-#include "clob/btree.h"
 #include "sock.h"
 #include "lol.h"
 #include "hash.h"
@@ -71,18 +68,6 @@ serror(const char *fmt, ...)
 	}
 	fputc('\n', stderr);
 	return;
-}
-
-static qx_t
-plqu_sum(plqu_t q)
-{
-/* sum up displayed quantities */
-	qx_t sum = 0.dd;
-	for (plqu_iter_t i = {.q = q}; plqu_iter_next(&i);) {
-		sum += i.v.qty.dis;
-		sum += i.v.qty.hid;
-	}
-	return sum;
 }
 
 
@@ -141,19 +126,6 @@ kill_user(uid_t u)
 	return 0;
 }
 
-static btree_val_t*
-find_top(btree_t t, btree_key_t *restrict k)
-{
-/* like btree_top but don't report back dark levels */
-	for (btree_iter_t ti = {t}; btree_iter_next(&ti);) {
-		if (LIKELY(ti.v->sum.dis > 0.dd)) {
-			*k = ti.k;
-			return ti.v;
-		}
-	}
-	return NULL;
-}
-
 
 #define SEND_OMSG(fd, x...)						\
 	do {								\
@@ -183,10 +155,18 @@ prnt_lvl2(int s, size_t ins)
 {
 	char buf[4096U];
 	size_t len = 0U;
+	qx_t mb = 0.dd, ma = 0.dd;
+	clob_aggiter_t bi, ai;
 
 	/* market orders first */
-	qx_t mb = plqu_sum(clob[ins].mkt[CLOB_SIDE_BID]);
-	qx_t ma = plqu_sum(clob[ins].mkt[CLOB_SIDE_ASK]);
+	for (bi = clob_aggiter(clob[ins], CLOB_TYPE_MKT, CLOB_SIDE_BID);
+	     clob_aggiter_next(&bi);) {
+		mb = bi.q.dis + bi.q.hid;
+	}
+	for (ai = clob_aggiter(clob[ins], CLOB_TYPE_MKT, CLOB_SIDE_ASK);
+	     clob_aggiter_next(&ai);) {
+		ma = ai.q.dis + ai.q.hid;
+	}
 
 	const size_t thisz = instz[ins + 1U] - instz[ins + 0U];
 	len += (memcpy(buf, instr + instz[ins], thisz), thisz);
@@ -200,14 +180,14 @@ prnt_lvl2(int s, size_t ins)
 	buf[len++] = '\n';
 
 	/* now for limits */
-	btree_iter_t bi = {clob[ins].lmt[CLOB_SIDE_BID]};
-	btree_iter_t ai = {clob[ins].lmt[CLOB_SIDE_ASK]};
+	bi = clob_aggiter(clob[ins], CLOB_TYPE_LMT, CLOB_SIDE_BID);
+	ai = clob_aggiter(clob[ins], CLOB_TYPE_LMT, CLOB_SIDE_ASK);
 
 	while (len < sizeof(buf)) {
 		bool bp, ap;
 
-		bp = btree_iter_next(&bi);
-		ap = btree_iter_next(&ai);
+		bp = clob_aggiter_next(&bi);
+		ap = clob_aggiter_next(&ai);
 
 		if (UNLIKELY(!bp && !ap)) {
 			break;
@@ -219,31 +199,31 @@ prnt_lvl2(int s, size_t ins)
 
 		buf[len++] = '\t';
 		if (bp) {
-			len += pxtostr(buf + len, sizeof(buf) - len, bi.k);
+			len += pxtostr(buf + len, sizeof(buf) - len, bi.p);
 		}
 		buf[len++] = '\t';
 		if (ap) {
-			len += pxtostr(buf + len, sizeof(buf) - len, ai.k);
+			len += pxtostr(buf + len, sizeof(buf) - len, ai.p);
 		}
 		buf[len++] = '\t';
 		if (bp) {
 			len += qxtostr(
-				buf + len, sizeof(buf) - len, bi.v->sum.dis);
+				buf + len, sizeof(buf) - len, bi.q.dis);
 		}
 		buf[len++] = '\t';
 		if (ap) {
 			len += qxtostr(
-				buf + len, sizeof(buf) - len, ai.v->sum.dis);
+				buf + len, sizeof(buf) - len, ai.q.dis);
 		}
 		buf[len++] = '\t';
 		if (bp) {
 			len += qxtostr(
-				buf + len, sizeof(buf) - len, bi.v->sum.hid);
+				buf + len, sizeof(buf) - len, bi.q.hid);
 		}
 		buf[len++] = '\t';
 		if (ap) {
 			len += qxtostr(
-				buf + len, sizeof(buf) - len, ai.v->sum.hid);
+				buf + len, sizeof(buf) - len, ai.q.hid);
 		}
 		buf[len++] = '\n';
 	}
@@ -293,26 +273,32 @@ static void
 chck_book(void)
 {
 	for (size_t j = 0U; j < NINSTR; j++) {
-		qx_t mb = plqu_sum(clob[j].mkt[CLOB_SIDE_BID]);
-		qx_t ma = plqu_sum(clob[j].mkt[CLOB_SIDE_ASK]);
+		clob_aggiter_t i;
 
-		if (mb > 0.dd) {
-			btree_iter_t ai = {clob[j].lmt[CLOB_SIDE_ASK]};
-			assert(!btree_iter_next(&ai));
+		i = clob_aggiter(clob[j], CLOB_TYPE_MKT, CLOB_SIDE_BID);
+		if (clob_aggiter_next(&i) && i.q.dis + i.q.hid > 0.dd) {
+			clob_aggiter_t ai =
+				clob_aggiter(
+					clob[j], CLOB_TYPE_LMT, CLOB_SIDE_ASK);
+			assert(!clob_aggiter_next(&ai));
 		}
-		if (ma > 0.dd) {
-			btree_iter_t bi = {clob[j].lmt[CLOB_SIDE_BID]};
-			assert(!btree_iter_next(&bi));
+
+		i = clob_aggiter(clob[j], CLOB_TYPE_MKT, CLOB_SIDE_ASK);
+		if (clob_aggiter_next(&i) && i.q.dis + i.q.hid > 0.dd) {
+			clob_aggiter_t bi =
+				clob_aggiter(
+					clob[j], CLOB_TYPE_LMT, CLOB_SIDE_BID);
+			assert(!clob_aggiter_next(&bi));
 		}
-		for (btree_iter_t ai = {clob[j].lmt[CLOB_SIDE_ASK]};
-		     btree_iter_next(&ai);) {
-			assert(ai.v->sum.dis >= 0.dd);
-			assert(ai.v->sum.hid >= 0.dd);
+		i = clob_aggiter(clob[j], CLOB_TYPE_LMT, CLOB_SIDE_ASK);
+		while (clob_aggiter_next(&i)) {
+			assert(i.q.dis >= 0.dd);
+			assert(i.q.hid >= 0.dd);
 		}
-		for (btree_iter_t bi = {clob[j].lmt[CLOB_SIDE_BID]};
-		     btree_iter_next(&bi);) {
-			assert(bi.v->sum.dis >= 0.dd);
-			assert(bi.v->sum.hid >= 0.dd);
+		i = clob_aggiter(clob[j], CLOB_TYPE_LMT, CLOB_SIDE_BID);
+		while (clob_aggiter_next(&i)) {
+			assert(i.q.dis >= 0.dd);
+			assert(i.q.hid >= 0.dd);
 		}
 	}
 	return;
@@ -434,21 +420,20 @@ diss_quo(quos_t q, size_t ins)
 		SEND_QMSG(quot_chan, QMSG_LVL, INS(ins), .quo = q->m[i]);
 	}
 	if (q->n) {
-		btree_key_t k;
-		btree_val_t *v;
+		clob_aggiter_t i;
 		quos_msg_t t;
 
-		v = find_top(clob[ins].lmt[CLOB_SIDE_ASK], &k);
-		if (LIKELY(v != NULL)) {
-			t = (quos_msg_t){CLOB_SIDE_ASK, k, v->sum.dis};
+		i = clob_aggiter(clob[ins], CLOB_TYPE_LMT, CLOB_SIDE_ASK);
+		if (clob_aggiter_next(&i)) {
+			t = (quos_msg_t){CLOB_SIDE_ASK, i.p, i.q.dis};
 		} else {
 			t = (quos_msg_t){CLOB_SIDE_ASK, NANPX, 0.dd};
 		}
 		SEND_QMSG(quot_chan, QMSG_TOP, INS(ins), .quo = t);
 
-		v = find_top(clob[ins].lmt[CLOB_SIDE_BID], &k);
-		if (LIKELY(v != NULL)) {
-			t = (quos_msg_t){CLOB_SIDE_BID, k, v->sum.dis};
+		i = clob_aggiter(clob[ins], CLOB_TYPE_LMT, CLOB_SIDE_BID);
+		if (clob_aggiter_next(&i)) {
+			t = (quos_msg_t){CLOB_SIDE_BID, i.p, i.q.dis};
 		} else {
 			t = (quos_msg_t){CLOB_SIDE_BID, NANPX, 0.dd};
 		}
