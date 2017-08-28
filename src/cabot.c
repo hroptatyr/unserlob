@@ -300,7 +300,7 @@ omsg_add_ord(int fd, size_t i, clob_ord_t o, const uid_t u)
 		return;
 	}
 	/* stick uid into orderbook */
-	o.user = u;
+	o.usr = u;
 	/* continuous trading */
 	oi = clob_add(clob[i], o);
 	/* let him know about the residual order */
@@ -327,7 +327,7 @@ diss_exe(unxs_t exe, size_t ins)
 		/* let the traders know before anyone else */
 		const clob_oid_t o = exe->o[MODE_SC * i];
 		const clob_side_t s = (clob_side_t)exe->s[i];
-		unxs_exa_t a = add_acct(o.user, ins, unxs_exa(exe->x[i], s));
+		unxs_exa_t a = add_acct(o.usr, ins, unxs_exa(exe->x[i], s));
 		char buf[256U];
 		size_t len = 0U;
 
@@ -338,11 +338,11 @@ diss_exe(unxs_t exe, size_t ins)
 		len += send_omsg(buf + len, sizeof(buf) - len,
 				 (omsg_t){OMSG_ACC, INS(ins), .exa = a});
 		if (LIKELY(len > 0)) {
-			send(user_sock(o.user), buf, len, 0);
+			send(user_sock(o.usr), buf, len, 0);
 			/* append user */
 			buf[len - 1U] = '\t';
 			len += snprintf(buf + len, sizeof(buf) - len,
-					"%u", (uid_t)o.user);
+					"%u", (uid_t)o.usr);
 			buf[len++] = '\n';
 			write(exec_chan, buf, len);
 		}

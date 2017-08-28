@@ -334,7 +334,7 @@ omsg_add_ord(int fd, size_t i, clob_ord_t o, const uid_t u)
 		return;
 	}
 	/* stick uid into orderbook */
-	o.user = u;
+	o.usr = u;
 	/* continuous trading */
 	o = unxs_order(clob[i], o, NANPX);
 	if (o.qty.dis + o.qty.hid > 0.dd) {
@@ -365,8 +365,8 @@ diss_exe(unxs_t exe, size_t ins)
 		const clob_oid_t co = exe->o[MODE_BI * i + CLOB_SIDE_TAKER];
 		const clob_side_t ss = (clob_side_t)exe->s[i];
 		const clob_side_t cs = clob_contra_side(ss);
-		unxs_exa_t sa = add_acct(so.user, ins, unxs_exa(exe->x[i], ss));
-		unxs_exa_t ca = add_acct(co.user, ins, unxs_exa(exe->x[i], cs));
+		unxs_exa_t sa = add_acct(so.usr, ins, unxs_exa(exe->x[i], ss));
+		unxs_exa_t ca = add_acct(co.usr, ins, unxs_exa(exe->x[i], cs));
 		char buf[256U];
 		size_t len = 0U;
 
@@ -374,15 +374,15 @@ diss_exe(unxs_t exe, size_t ins)
 				 (omsg_t){OMSG_FIL, INS(ins),
 						 .fid = so,
 						 .exe = exe->x[i],
-						 .con = co.user});
+						 .con = co.usr});
 		len += send_omsg(buf + len, sizeof(buf) - len,
 				 (omsg_t){OMSG_ACC, INS(ins), .exa = sa});
 		if (LIKELY(len > 0)) {
-			send(user_sock(so.user), buf, len, 0);
+			send(user_sock(so.usr), buf, len, 0);
 			/* append user to account (non-lol compliant) */
 			buf[len - 1U] = '\t';
 			len += snprintf(buf + len, sizeof(buf) - len,
-					"%u", (uid_t)so.user);
+					"%u", (uid_t)so.usr);
 			buf[len++] = '\n';
 			write(exec_chan, buf, len);
 		}
@@ -392,15 +392,15 @@ diss_exe(unxs_t exe, size_t ins)
 				 (omsg_t){OMSG_FIL, INS(ins),
 						 .fid = co,
 						 .exe = exe->x[i],
-						 .con = so.user});
+						 .con = so.usr});
 		len += send_omsg(buf + len, sizeof(buf) - len,
 				 (omsg_t){OMSG_ACC, INS(ins), .exa = ca});
 		if (LIKELY(len > 0)) {
-			send(user_sock(co.user), buf, len, 0);
+			send(user_sock(co.usr), buf, len, 0);
 			/* append user (non-lol compliant) */
 			buf[len - 1U] = '\t';
 			len += snprintf(buf + len, sizeof(buf) - len,
-					"%u", (uid_t)co.user);
+					"%u", (uid_t)co.usr);
 			buf[len++] = '\n';
 			write(exec_chan, buf, len);
 		}
